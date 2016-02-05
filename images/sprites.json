@@ -1,0 +1,28 @@
+{"frames": {
+
+"bug.png":
+{
+	"frame": {"x":1,"y":1,"w":200,"h":200},
+	"rotated": false,
+	"trimmed": false,
+	"spriteSourceSize": {"x":0,"y":0,"w":200,"h":200},
+	"sourceSize": {"w":200,"h":200}
+},
+"pill.png":
+{
+	"frame": {"x":203,"y":1,"w":200,"h":200},
+	"rotated": false,
+	"trimmed": false,
+	"spriteSourceSize": {"x":0,"y":0,"w":200,"h":200},
+	"sourceSize": {"w":200,"h":200}
+}},
+"meta": {
+	"app": "http://www.codeandweb.com/texturepacker",
+	"version": "1.0",
+	"image": "sprites.png",
+	"format": "RGBA8888",
+	"size": {"w":404,"h":202},
+	"scale": "1",
+	"smartupdate": "$TexturePacker:SmartUpdate:a440684d9cfb6a9cb86729c39a665f50:d0da60ef7a339792e31172ef15457ae4:1eabdf11f75e3a4fe3147baf7b5be24b$"
+}
+}
