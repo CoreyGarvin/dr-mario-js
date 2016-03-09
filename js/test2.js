@@ -1,11 +1,11 @@
+
 (function Main() {
     var STAGE_WIDTH = window.innerWidth,
         STAGE_HEIGHT = window.innerHeight;
     var METER = 80; // Pixels
     var cellSize = .25; // Meters
 
-    var bodies = [],
-        actors = [];
+    var actors = [];
     var container, boardContainer, renderer, graphics;
     var world, mouseJoint;
     var touchX, touchY;
@@ -13,12 +13,91 @@
     var stats;
     var physicsEnabled = false;
 
+    var gameBoardOffsetX = 0,
+        gameBoardOffsetY = 0;
 
 
+    var Actor = function(cell, container, world) {
+        this.useGamePosition = function() {
+            var worldPosition = new Box2D.Common.Math.b2Vec2(
+                cell.position.col * cellSize + (cellSize / 2),
+                cell.position.row * cellSize + (cellSize / 2)
+            );
+            physicsBody.SetPositionAndAngle(
+                worldPosition, cell.type.rotation);
 
+            // Experimenting with tweening
+            sprite.position.x += (worldPosition.x * METER + offsetX - sprite.position.x) / 2;
+            sprite.position.y += (worldPosition.y * METER + offsetY - sprite.position.y) / 2;
+            // sprite.position.set(
+            //     worldPosition.x * METER,
+            //     worldPosition.y * METER
+            // // );
+            // if (Math.abs(sprite.rotation) < 0.05) {
+            //     sprite.rotation = 0;
+            // } else {
+                // var before = sprite.rotation;
+                // sprite.rotation = sprite.rotation - (2 * Math.PI * (Math.round(sprite.rotation / (2 * Math.PI))));
+                // console.log(before + ", " + sprite.rotation);
+                sprite.rotation += (cell.type.rotation - sprite.rotation) / 1.5;
+            // }
+            // sprite.rotation = cell.type.rotation;
 
+        };
+        this.squishLeft = function(f) {
+            var tmp = widthScale;
+            widthScale = 0.95;
+            offsetX = -sprite.width * (1 - widthScale) * f ;
+            setTimeout(function() {
+                widthScale = 1;
+                offsetX = 0;
+            }, 100);
+        };
+        this.usePhysicsBodyPosition = function() {
+            var physicsBodyPosition = physicsBody.GetPosition();
+            sprite.position.set(
+                physicsBodyPosition.x * METER,
+                physicsBodyPosition.y * METER
+            );
+            sprite.rotation = physicsBody.GetAngle();
+        };
+        this.onUpdate = function() {
+            var side = cellSize * METER;
+            sprite.width += (side * widthScale - sprite.width) / 3;
+            sprite.height += (side * heightScale - sprite.height) / 3;
+            if (physicsEnabled) this.usePhysicsBodyPosition();
+            else                this.useGamePosition();
+        }
+        var cell = cell;
+        var widthScale = heightScale = 1;
+        var offsetX = offsetY = 0;
 
-    var board = [
+        // Physics body
+        var bodyDef = new Box2D.Dynamics.b2BodyDef();
+        bodyDef.type = Box2D.Dynamics.b2Body.b2_dynamicBody;
+        bodyDef.position.Set(
+            cell.position.col * cellSize + (cellSize / 2),
+            cell.position.row * cellSize + (cellSize / 2)
+        );
+        var physicsBody = world.CreateBody(bodyDef);
+
+        var fixtureDef = new Box2D.Dynamics.b2FixtureDef();
+        fixtureDef.shape = new Box2D.Collision.Shapes.b2PolygonShape();
+        fixtureDef.density = 1;
+        fixtureDef.shape.SetAsBox(cellSize / 2, cellSize / 2);
+        physicsBody.CreateFixture(fixtureDef);
+
+        // Graphics
+        var sprite = PIXI.Sprite.fromFrame(cell.type.frame);
+        sprite.tint = cell.color.value;
+        var bodyPosition = physicsBody.GetPosition();
+
+        sprite.anchor.x = sprite.anchor.y = 0.5;
+        this.useGamePosition()
+        container.addChild(sprite);
+    };
+
+/*    var board = [
         [ 0,  0,  0,  0,  0,  0,  0,  6],
         [ 0,  0,  0,  0,  0,  0,  0,  6],
         [ 0,  0,  0,  0,  0,  0,  0,  6],
@@ -36,7 +115,8 @@
         [ 0, 12,  0, 18, 18,  0,  6, 18],
         [18, 18,  0,  0,  6, 18,  0,  0],
         [ 6, 12,  6, 18, 12, 12, 18,  6],
-    ];
+    ];*/
+    // board = game.cells;
 
     (function init() {
         if (!window.requestAnimationFrame) {
@@ -63,10 +143,11 @@
 
         // stage = new PIXI.Stage(0xffffff, true);
 
+        // Main screen-sized container
         container = new PIXI.Container();
-
+        // Container for the gameboard
         boardContainer = new PIXI.Container();
-        
+
         var options = {
             // view: document.getElementById("canvas"),
             transparent: false,
@@ -78,36 +159,12 @@
         renderer.autoResize = true;
         document.body.appendChild(renderer.view);
 
-        graphics = new PIXI.Graphics();
-        graphics.alpha = 0.6;
-        // graphics.beginFill(0x333333);
-
-        // set the line style to have a width of 5 and set the color to red
-        graphics.lineStyle(5, 0x993333);
-
-        // draw a rectangle
-        graphics.drawRect(-2.5, -2.5, board[0].length*cellSize*METER + 20, board.length*cellSize*METER + 20);
-
-        var onWindowResize = function() {
-            var STAGE_WIDTH = window.innerWidth,
-                STAGE_HEIGHT = window.innerHeight;
-            METER = STAGE_HEIGHT / (cellSize * (board.length + 5));
-            // renderer.width = STAGE_WIDTH;
-            // renderer.height = STAGE_HEIGHT;
-            renderer.resize(STAGE_WIDTH,STAGE_HEIGHT)
-            boardContainer.position.x = renderer.width  / 2 - (cellSize * board[0].length / 2 * METER) - (0*cellSize * METER / 4);
-            boardContainer.position.y = renderer.height / 2 - (cellSize * board.length / 2 * METER) - (0*cellSize * METER/ 4);
-            graphics.width = (cellSize * board[0].length * METER + 12.5);
-            graphics.height = (cellSize * board.length * METER + 12.5);
-        };
-
-        window.addEventListener("resize", onWindowResize);
-        onWindowResize();
         // load resources
         PIXI.loader
             .add('spritesheet','images/sprites.json')
             .load(onAssetsLoaded);
     }
+
 
     function onAssetsLoaded() {
         world = new Box2D.Dynamics.b2World(new Box2D.Common.Math.b2Vec2(0, 10), true);
@@ -124,83 +181,102 @@
         const bodyDef = new Box2D.Dynamics.b2BodyDef();
         bodyDef.type = Box2D.Dynamics.b2Body.b2_staticBody;
 
-        //down
+        var game = new DrMarioGame();
+        game.register(function() {
+            var cellCreated = function(cell) {
+                actors.push(new Actor(cell, boardContainer, world))
+            };
+
+            return new Component("Graphics",
+                {
+                    cellCreated: cellCreated,
+                }
+            );
+        }());
+        // Physics walls
+        // Floor
         polyFixture.shape.SetAsBox(10, 1);
         // bodyDef.position.Set(9, STAGE_HEIGHT / METER - 2);
-        bodyDef.position.Set(9, board.length * cellSize + (cellSize*4));
+        bodyDef.position.Set(9, game.rows * cellSize + (cellSize*4));
         world.CreateBody(bodyDef).CreateFixture(polyFixture);
-
-        //left
+        // Left wall
         // polyFixture.shape.SetAsBox(1, 100);
         // bodyDef.position.Set(-1, 0);
         // world.CreateBody(bodyDef).CreateFixture(polyFixture);
 
-        //right
+        // Right wall
         bodyDef.position.Set(STAGE_WIDTH / METER + 1, 0);
         // world.CreateBody(bodyDef).CreateFixture(polyFixture);
         bodyDef.type = Box2D.Dynamics.b2Body.b2_dynamicBody;
+
+        // Draw game border
+        graphics = new PIXI.Graphics();
+        graphics.alpha = 0.6;
+        // graphics.beginFill(0x333333);
+        // set the line style to have a width of 5 and set the color to red
+        graphics.lineStyle(5, 0x993333);
+        // draw a rectangle
+        graphics.drawRect(-2.5, -2.5, game.cols * cellSize*METER + 20, game.rows * cellSize * METER + 20);
+
+        var onWindowResize = function() {
+            var STAGE_WIDTH = window.innerWidth,
+                STAGE_HEIGHT = window.innerHeight;
+            METER = STAGE_HEIGHT / (cellSize * (game.rows + 5));
+            // renderer.width = STAGE_WIDTH;
+            // renderer.height = STAGE_HEIGHT;
+            renderer.resize(STAGE_WIDTH,STAGE_HEIGHT)
+
+            boardContainer.position.x = gameBoardOffsetX = renderer.width  / 2 - (cellSize * game.cols / 2 * METER) - (0*cellSize * METER / 4);
+            boardContainer.position.y = gameBoardOffsetY = renderer.height / 2 - (cellSize * game.rows / 2 * METER) - (0*cellSize * METER/ 4);
+            graphics.width = (cellSize * game.cols * METER + 12.5);
+            graphics.height = (cellSize * game.rows * METER + 12.5);
+        };
+
+        window.addEventListener("resize", onWindowResize);
+        onWindowResize();
+        game.start();
 
         document.onkeydown = function(e) {
             switch (e.keyCode) {
                 case 37:
                     console.log('left');
+                    // actors[Math.floor(Math.random()*actors.length)].gameCell.moveTo(0,0, true);
+                    // game.settle();
+                    if (!game.playerControls.left()) {
+                        // actors[10].squishLeft(.5);
+                        // actors[11].squishLeft(1.5);
+                    }
                     break;
                 case 38:
                     console.log('up');
+                    physicsEnabled = !physicsEnabled;
                     break;
                 case 39:
                     console.log('right');
+                    game.playerControls.right();
                     break;
                 case 40:
                     console.log('down');
+                    game.playerControls.down();
                     break;
+                case 88:
+                    game.playerControls.rotate();
+                    break;
+                case 90:
+                    game.playerControls.rotate(true);
+                    break;
+                default:
+                    console.log(e.keyCode);
             }
         };
 
-        for (var i = 0; i < board.length; i++) {
-            for (var j = 0; j < board[i].length; j++) {
-                if (board[i][j] === 0) {
-                    continue;
-                }
-                // Physics body
-                bodyDef.position.Set(j * cellSize + (cellSize / 2), i * cellSize + (cellSize / 2));
-                var body = world.CreateBody(bodyDef);
 
-                polyFixture.shape.SetAsBox(cellSize / 2, cellSize / 2);
-                body.CreateFixture(polyFixture);
-                bodies.push(body);
-
-                // Graphics
-                var frameName = "bug.png";
-                if (board[i][j] % 6 != 0) {
-                    frameName = "pill.png";
-                }
-                var piece = PIXI.Sprite.fromFrame(frameName);
-                piece.tint = {
-                    1: 0xFF0000,
-                    2: 0x0000FF,
-                    3: 0xFFFF00
-                }[board[i][j]/6];
-
-                var bodyPosition = body.GetPosition();
-                piece.position.x = bodyPosition.x * METER;
-                piece.position.y = bodyPosition.y * METER;
-                // piece.position.x = j * cellSize * METER;
-                // piece.position.y = i * cellSize * METER;
-                piece.anchor.x = piece.anchor.y = 0.5;
-                piece.width = cellSize * METER;
-                piece.height = cellSize * METER;
-                piece.i = i;
-                actors[actors.length] = piece;
-                boardContainer.addChild(piece);
-            }
-        }
-
-
-
+        // var cells = game.cells();
+        // for (var i = 0; i < cells.length; i++) {
+        //     actors.push(new Actor(cells[i], boardContainer, world));
+        // }
         boardContainer.addChild(graphics);
         container.addChild(boardContainer);
-
 
         renderer.view.addEventListener("mousedown", function(event) {
             isBegin = true;
@@ -228,19 +304,19 @@
             touchY = undefined;
         }, true);
 
-
         update();
     }
-
+    // var gameBoardOffsetX = 0,
+    //     gameBoardOffsetY = 0;
     function onMove(event) {
         if (event["changedTouches"]) {
             var touche = event["changedTouches"][ 0];
 
-            touchX = touche.pageX / METER;
-            touchY = touche.pageY / METER;
+            touchX = (touche.pageX + 500) / METER;
+            touchY = (touche.pageY + 0) / METER;
         } else {
-            touchX = event.offsetX / METER;
-            touchY = event.offsetY / METER;
+            touchX = (event.offsetX - gameBoardOffsetX) / METER;
+            touchY = (event.offsetY - gameBoardOffsetY) / METER;
         }
     }
 
@@ -265,7 +341,8 @@
         return body;
     }
 
-    function update() {
+    function update(t) {
+        // console.log(t);
         requestAnimationFrame(update);
         // METER = 80 + (10 * Math.sin(Date.now()/1000));
 
@@ -291,25 +368,26 @@
                 mouseJoint = null;
             }
         }
-        if (!physicsEnabled) {
+        if (physicsEnabled) {
             world.Step(1 / 60, 3, 3);
             world.ClearForces();
-            // physicsEnabled = false;
-
-
         }
-        // Position actors to match physics bodies
-        const n = actors.length;
-        for (var i = 0; i < n; i++) {
-            var body = bodies[i];
-            var actor = actors[i];
-            var position = body.GetPosition();
-            actor.position.x = position.x * METER;
-            actor.position.y = position.y * METER;
-            actor.width = cellSize * METER;
-            actor.height = cellSize * METER;
-            actor.rotation = body.GetAngle();
+        for (var i = 0; i < actors.length; i++) {
+            actors[i].onUpdate();
         }
+
+        // // Position actors to match physics bodies
+        // const n = actors.length;
+        // for (var i = 0; i < n; i++) {
+        //     var body = bodies[i];
+        //     var actor = actors[i];
+        //     var position = body.GetPosition();
+        //     actor.position.x = position.x * METER;
+        //     actor.position.y = position.y * METER;
+        //     actor.width = cellSize * METER;
+        //     actor.height = cellSize * METER;
+        //     actor.rotation = body.GetAngle();
+        // }
         renderer.render(container);
         stats.update();
     }

@@ -1,4 +1,4 @@
-package luckyguess
+package drmario
 
 // Currently working on extracting out the guessing into struct functions, leaving the http handler just calling that fn
 //JS api mostly working
