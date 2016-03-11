@@ -18,6 +18,7 @@
 
 
     var Actor = function(cell, container, world) {
+        var self = this;
         this.useGamePosition = function() {
             var worldPosition = new Box2D.Common.Math.b2Vec2(
                 cell.position.col * cellSize + (cellSize / 2),
@@ -68,6 +69,22 @@
             if (physicsEnabled) this.usePhysicsBodyPosition();
             else                this.useGamePosition();
         }
+        this.destroy = function(ms, then) {
+            sprite.alpha /= 2;
+            sprite.tint = 0xFFFFFF;
+            return new Promise(function(resolve) {
+                setTimeout(function() {
+                    container.removeChild(sprite);
+                    actors = actors.filter(function(actor) {return actor !== self;});
+                    sprite.destroy();
+                    world.DestroyBody(physicsBody);
+                    resolve();
+                }, 1000);
+            });
+        };
+
+        this.id = cell.id;
+        console.log("Actor ID " + this.id + " created");
         var cell = cell;
         var widthScale = heightScale = 1;
         var offsetX = offsetY = 0;
@@ -182,14 +199,27 @@
         bodyDef.type = Box2D.Dynamics.b2Body.b2_staticBody;
 
         var game = new DrMarioGame();
+
         game.register(function() {
             var cellCreated = function(cell) {
-                actors.push(new Actor(cell, boardContainer, world))
+                actors.push(new Actor(cell, boardContainer, world));
+            };
+
+            var cellDestroyed = function(cell) {
+                var actor = actors.filter(function(a) {
+                    return a.id === cell.id;
+                })[0];
+                if (actor == null) {
+                    console.log("actor null");
+                } else {
+                    return actor.destroy();
+                }
             };
 
             return new Component("Graphics",
                 {
                     cellCreated: cellCreated,
+                    cellDestroyed: cellDestroyed,
                 }
             );
         }());
