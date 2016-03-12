@@ -107,7 +107,7 @@ var DrMarioGame = function(width, height, nBugs, pillQueue) {
     var self = this;
     // 2d [] of Cells, list of cells
     var map = null;
-    var cells = null;
+    // var cells = null;
     var piece = null;
     var pieceQ = [];
     var cellsCreated = 0;
@@ -116,7 +116,7 @@ var DrMarioGame = function(width, height, nBugs, pillQueue) {
     var gravityStep = 1000;
     this.rows = height || 17;
     this.cols = width || 8;
-    nBugs = nBugs || 2;
+    nBugs = nBugs || 80;
 
     const STATE = {
         PLAYER_CONTROL:  "Player's Turn",
@@ -135,6 +135,18 @@ var DrMarioGame = function(width, height, nBugs, pillQueue) {
             })
         );
     };
+
+    var cells = function() {
+        var output = [];
+        for(var row = 0; row < map.length; row++) {
+            for(var col = 0; col < map[row].length; col++) {
+                if (map[row][col]) {
+                    output.push(map[row][col]);
+                }
+            }
+        }
+        return output;
+    }
 
     // A game piece
     var Cell = function(position, type, color) {
@@ -160,7 +172,7 @@ var DrMarioGame = function(width, height, nBugs, pillQueue) {
                 return true;
             }
             // Check if space is already occupied
-            if (!force && map[row][col] != null && !(piece.cells.indexOf(map[row][col]) != -1 && ignorePiece)) {
+            if (!force && map[row][col] != null && !(piece.parts.indexOf(map[row][col]) != -1 && ignorePiece)) {
                 return false;
             }
             // Move the cell, void the old space
@@ -179,9 +191,9 @@ var DrMarioGame = function(width, height, nBugs, pillQueue) {
             // Remove from map
             map[this.position.row][this.position.col] = null;
             // Remove from cells list
-            cells.filter(function(cell) {
-                return this !== cell;
-            });
+            // cells.filter(function(cell) {
+            //     return this !== cell;
+            // });
             if (this.type === TYPE.LEFT) map[this.position.row][this.position.col + 1].type = TYPE.ORPHAN;
             if (this.type === TYPE.RIGHT) map[this.position.row][this.position.col - 1].type = TYPE.ORPHAN;
             if (this.type === TYPE.TOP) map[this.position.row + 1][this.position.col].type = TYPE.ORPHAN;
@@ -201,7 +213,7 @@ var DrMarioGame = function(width, height, nBugs, pillQueue) {
         this.moveRight = function(n, test, force, ignorePiece) {
             return this.moveTo(this.position.toRight(n), test, force, ignorePiece);
         };
-        cells.push(this);
+        // cells.push(this);
         broadcastState("cellCreated", this);
     };
 
@@ -219,15 +231,15 @@ var DrMarioGame = function(width, height, nBugs, pillQueue) {
 
     var generateMap = function(rows, cols, nBugs) {
         map = init2d(rows, cols, null);
-        cells = [];
+        // cells = [];
 
-        while (cells.length < nBugs) {
+        for (var i = 0; i < nBugs; i++) {
             new Cell().moveTo();
         }
     };
 
     var settle = function(items) {
-        items = (items || cells).filter(function(cell) {
+        items = (items || cells()).filter(function(cell) {
             return cell.type === TYPE.ORPHAN;
         });
         var motion = false;
@@ -371,71 +383,71 @@ var DrMarioGame = function(width, height, nBugs, pillQueue) {
     //     }
     // };
 
-    var PlayerPiece = function(cells) {
-        this.cells = cells || [
+    var PlayerPiece = function(parts) {
+        this.parts = parts || [
             new Cell(new Position(1,3), TYPE.LEFT),
             new Cell(new Position(1,4), TYPE.RIGHT)
         ];
 
         this.addToMap = function() {
-            this.cells[0].moveTo();
-            this.cells[1].moveTo();
+            this.parts[0].moveTo();
+            this.parts[1].moveTo();
         };
 
         this.move = function(mover) {
-            if (this.cells[0][mover](1, true) && this.cells[1][mover](1, true)) {
-                this.cells[0][mover]();
-                this.cells[1][mover]();
+            if (this.parts[0][mover](1, true) && this.parts[1][mover](1, true)) {
+                this.parts[0][mover]();
+                this.parts[1][mover]();
                 return true;
             }
             return false;
         };
 
         this.rotate = function(cc) {
-            var horz = this.cells[0].position.row === this.cells[1].position.row;
+            var horz = this.parts[0].position.row === this.parts[1].position.row;
             // Horizontal -> Vertical rotation
             if (horz) {
                 // Default unobstructed
-                if (!this.cells[1].moveTo(this.cells[0].position.above())) {
+                if (!this.parts[1].moveTo(this.parts[0].position.above())) {
                     // Try above-right
-                    if (this.cells[1].moveUp()) {
-                        this.cells[0].moveRight();
+                    if (this.parts[1].moveUp()) {
+                        this.parts[0].moveRight();
                     // Try below
-                    } else if (!this.cells[1].moveTo(this.cells[0].position.below())) {
+                    } else if (!this.parts[1].moveTo(this.parts[0].position.below())) {
                         // Try below-right
-                        if (this.cells[1].moveDown()) {
-                            this.cells[0].moveRight();
+                        if (this.parts[1].moveDown()) {
+                            this.parts[0].moveRight();
                         } else return false;
                     }
                 }
             // Vertical -> Horizontal, try right
-            } else if (!this.cells[1].moveTo(this.cells[0].position.toRight())) {
+            } else if (!this.parts[1].moveTo(this.parts[0].position.toRight())) {
                 // Try shifting left
-                if (this.cells[0].moveLeft()) {
-                    this.cells[1].moveDown();
+                if (this.parts[0].moveLeft()) {
+                    this.parts[1].moveDown();
                 } else return false;
             }
             // Achieve counter-clockwise rotation by
             // swapping positions
             if ((horz && !cc) || (!horz && cc)) {
-                var tmp = this.cells[0].position;
-                // this.cells[0].position = this.cells[1].position;
-                // this.cells[1].position = tmp;
-                this.cells[0].moveTo(this.cells[1].position, false, true);
-                this.cells[1].moveTo(tmp, false, true);
+                var tmp = this.parts[0].position;
+                // this.parts[0].position = this.parts[1].position;
+                // this.parts[1].position = tmp;
+                this.parts[0].moveTo(this.parts[1].position, false, true);
+                this.parts[1].moveTo(tmp, false, true);
             }
-            // Ensure cells[0] is the most lower-right cells
-            this.cells.sort(function(a,b) {
+            // Ensure parts[0] is the most lower-right cells
+            this.parts.sort(function(a,b) {
                 return b.position.row - a.position.row ||
                 a.position.col - b.position.col;
             });
             // Set cells types
             if (horz) {
-                this.cells[0].type = TYPE.BOTTOM;
-                this.cells[1].type = TYPE.TOP;
+                this.parts[0].type = TYPE.BOTTOM;
+                this.parts[1].type = TYPE.TOP;
             } else {
-                this.cells[0].type = TYPE.LEFT;
-                this.cells[1].type = TYPE.RIGHT;
+                this.parts[0].type = TYPE.LEFT;
+                this.parts[1].type = TYPE.RIGHT;
             }
             return true;
         };
@@ -453,20 +465,4 @@ var DrMarioGame = function(width, height, nBugs, pillQueue) {
         }),
         rotate: ifPlayerTurn(function(cc) {return piece.rotate(cc);})
     };
-    // return {
-    //     rows: map.length,
-    //     cols: map[0].length,
-    //     // piece: function() {
-    //     //     return piece;
-    //     // },
-    //     cells: function() {
-    //         return cells;
-    //     },
-    //     print: function() {
-    //         console.log(map.map(function(row) {
-    //             return row.join(",");
-    //         }).join("\n"));
-    //     },
-    //     playerControls: 
-    // };
 };
