@@ -9,6 +9,7 @@ var html = `
     <link rel="stylesheet" href="css/style.css">
     <script src="js/pixi.js"></script>
     <script src="js/promiscuous.js"></script>
+    <script src="js/other.js"></script>
     <script src="js/stats.js"></script>
     <script src="js/box2d.js"></script>
     <script src="js/game.js"></script>

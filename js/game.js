@@ -1,108 +1,3 @@
-var debug = true;
-var log = function(msg) { if (debug) console.log(msg);}
-
-// Returns a random integer between min (included) and < max (not included)
-function getRandomInt(min, max) {
-  return Math.floor(Math.random() * (max - min)) + min;
-}
-
-// Returns a random integer between min (included) and max (included)
-function getRandomIntInclusive(min, max) {
-  return Math.floor(Math.random() * (max - min + 1)) + min;
-}
-
-function init2d(rows, cols, val) {
-  var array = [], row = [];
-  while (cols--) row.push(val);
-  while (rows--) array.push(row.slice());
-  return array;
-}
-
-function toRadians(deg) {
-    return deg * Math.PI / 180;
-}
-
-var ColorPalette = function(colors) {
-    // Make colors publically available (necessary?)
-    Object.keys(colors).forEach(function(key,index) {
-        this[key] = colors[key];
-    });
-
-    // Return a random color
-    this.random = function() {
-        var keys = Object.keys(colors);
-        return colors[keys[getRandomInt(0, keys.length)]];
-    };
-};
-
-const bugPalette = new ColorPalette({
-    RED:    {name: "Red",    value: 0xFF0000},
-    YELLOW: {name: "Yellow", value: 0xFFFF00},
-    BLUE:   {name: "Blue",   value: 0x0000FF},
-});
-
-const TYPE = {
-    BUG:    {name: "Bug",           frame: "bug.png",   rotation: 0},
-    TOP:    {name: "Pill Top",      frame: "pill.png",  rotation: toRadians(-90)},
-    BOTTOM: {name: "Pill Bottom",   frame: "pill.png",  rotation: toRadians(90)},
-    LEFT:   {name: "Pill Left",     frame: "pill.png",  rotation: toRadians(180)},
-    RIGHT:  {name: "Pill Right",    frame: "pill.png",  rotation: 0},
-    ORPHAN: {name: "Pill Piece",    frame: "bug.png",   rotation: 0},
-};
-
-var Position = function(row, col) {
-    this.set = function(row, col) {
-        this.row = row;
-        this.col = col;
-    };
-    this.above = function(n) {
-        return new Position(this.row - (n || 1), this.col);
-    };
-    this.below = function(n) {
-        return this.above(-(n || 1));
-    };
-    this.toLeft = function(n) {
-        return new Position(this.row, this.col - (n || 1));
-    };
-    this.toRight = function(n) {
-        return this.toLeft(-(n || 1));
-    };
-    this.set(row, col);
-};
-
-var Component = function(name, states) {
-    var states = states;
-    this.name = name;
-
-    /*
-    Contact point between the controller and a component.  Components
-    whose 'states' var contains a function(keyed by state name) are
-    effectively 'listening' to state changes broadcasted from the
-    controller.  State change handlers may return a Promise, enabling
-    them to effectively take as much time as they need to "return";
-    @param {String} arguments[0]
-    @param {(any)}  (all other args)
-    @return {Promise}
-     */
-    this.enterState = function() {
-        var arguments = Array.prototype.slice.call(arguments);
-        var state = arguments.shift();
-        if (states.hasOwnProperty(state)) {
-            var msg = ("\tACCEPTED:\t" + this.name);
-            var p = states[state].apply(this, arguments);
-            if (p instanceof Object && p.hasOwnProperty("then")) {
-                log(msg + "success(Promise)");
-                return p;
-            } else {
-                log(msg + "\tsuccess(" + (p == null ? "" : p) + ")");
-                return Promise.resolve(p);
-            }
-        }
-        log("\tIGNORED :\t" + this.name);
-        return Promise.resolve();
-    };
-};
-
 var DrMarioGame = function(width, height, nBugs, pillQueue) {
     var self = this;
     // 2d [] of Cells, list of cells
@@ -113,27 +8,25 @@ var DrMarioGame = function(width, height, nBugs, pillQueue) {
     var cellsCreated = 0;
     var gameState = 0;
     var turnTimer = null;
-    var gravityStep = 1000;
+    var gravityStep = 600;
+    var emitEvents = false;
     this.rows = height || 17;
     this.cols = width || 8;
-    nBugs = nBugs || 80;
+    nBugs = nBugs || 90;
 
     const STATE = {
         PLAYER_CONTROL:  "Player's Turn",
-        PHYSICS_CONTROL: "Physic's Turn"
+        PHYSICS_CONTROL: "Physic's Turn",
+        GAME_OVER: "Game Over",
+        GAME_WON: "Game won"
     };
 
-    var registeredComponents = [];
 
-    // Notifies all registered components of the new game state ()
-    var broadcastState = function() {
-        var args = arguments;
-        log("\n" + arguments[0]);
-        return Promise.all(registeredComponents.map(
-            function(component) {
-                return component.enterState.apply(component, args);
-            })
-        );
+
+    var emit = function() {
+        if (emitEvents) {
+            return Events.emit.apply(this, arguments);
+        }
     };
 
     var cells = function() {
@@ -150,7 +43,7 @@ var DrMarioGame = function(width, height, nBugs, pillQueue) {
 
     // A game piece
     var Cell = function(position, type, color) {
-        this.position = position || randomBlankPosition(4);
+        this.position = position || null;
         this.color = color || bugPalette.random();
         this.type = type || TYPE.BUG;
         this.destroyed = false;
@@ -161,7 +54,7 @@ var DrMarioGame = function(width, height, nBugs, pillQueue) {
             var row = position.row,
                 col = position.col;
                 force = force || false,
-                ignorePiece = ignorePiece || true;
+                ignorePiece = ignorePiece == null || ignorePiece === true;
 
             // Check bounds
             if (row < 0 || row >= map.length ||
@@ -177,7 +70,7 @@ var DrMarioGame = function(width, height, nBugs, pillQueue) {
             }
             // Move the cell, void the old space
             if (!test) {
-                if (map[this.position.row][this.position.col] === this) {
+                if (this.position && map[this.position.row][this.position.col] === this) {
                     map[this.position.row][this.position.col] = null;
                 }
                 map[row][col] = this;
@@ -198,7 +91,7 @@ var DrMarioGame = function(width, height, nBugs, pillQueue) {
             if (this.type === TYPE.RIGHT) map[this.position.row][this.position.col - 1].type = TYPE.ORPHAN;
             if (this.type === TYPE.TOP) map[this.position.row + 1][this.position.col].type = TYPE.ORPHAN;
             if (this.type === TYPE.BOTTOM) map[this.position.row - 1][this.position.col].type = TYPE.ORPHAN;
-            return broadcastState("cellDestroyed", this);
+            return emit("cellDestroyed", this);
         };
 
         this.moveUp = function(n, test, force, ignorePiece) {
@@ -213,8 +106,7 @@ var DrMarioGame = function(width, height, nBugs, pillQueue) {
         this.moveRight = function(n, test, force, ignorePiece) {
             return this.moveTo(this.position.toRight(n), test, force, ignorePiece);
         };
-        // cells.push(this);
-        broadcastState("cellCreated", this);
+        emit("cellCreated", this);
     };
 
     // Returns a blank position on the map (random, with constraints)
@@ -229,18 +121,31 @@ var DrMarioGame = function(width, height, nBugs, pillQueue) {
         return pos;
     };
 
+    // Generate 2d map of bugs
     var generateMap = function(rows, cols, nBugs) {
-        map = init2d(rows, cols, null);
-        // cells = [];
+        // setTimeout(function() {
+            map = init2d(rows, cols, null);
+            var needs = nBugs;
+            var iterations = 0;
+            do {
+                if (iterations++ > 10) break;
+                for (var i = 0; i < needs; i++) {
+                    new Cell(randomBlankPosition(4)).moveTo();
+                }
+                var kCells = killables(3);
+                needs = kCells.length;
+                kCells.map(function(cell) {
+                    cell.destroy();
+                })
+            } while (needs > 0);
+        // }, 15000);
 
-        for (var i = 0; i < nBugs; i++) {
-            new Cell().moveTo();
-        }
     };
 
+    // Moves all eligable pieces downward
     var settle = function(items) {
         items = (items || cells()).filter(function(cell) {
-            return cell.type === TYPE.ORPHAN;
+            return cell.type !== TYPE.BUG && cell.position;
         });
         var motion = false;
         // Sort by row, so that lowest items are processed first
@@ -248,9 +153,23 @@ var DrMarioGame = function(width, height, nBugs, pillQueue) {
             return b.position.row - a.position.row});
 
         // Move each eligable cell down
-        items.forEach(function(cell) {
+        for (var i = 0; i < items.length; i++) {
+            var cell = items[i];
+            // These conditionals keep pill pieces 'glued' together
+            // If left pill and can move down, ensure the right half can
+            if (cell.type === TYPE.LEFT && cell.moveDown(1, true)) {
+                var next = map[cell.position.row][cell.position.col + 1];
+                if (next && next.type === TYPE.RIGHT && !next.moveDown(1, true)) {
+                    continue;
+                }
+            } else if (cell.type === TYPE.RIGHT && cell.moveDown(1, true)) {
+                var next = map[cell.position.row][cell.position.col - 1];
+                if (next && next.type === TYPE.LEFT && !next.moveDown(1, true)) {
+                    continue;
+                }
+            }
             motion = cell.moveDown(1, false, false, false) || motion;
-        });
+        };
         return motion;
     };
 
@@ -306,29 +225,32 @@ var DrMarioGame = function(width, height, nBugs, pillQueue) {
         });
     };
 
-    this.register = function() {
-        for (var i = 0; i < arguments.length; i++) {
-            registeredComponents.push(arguments[i]);
-        }
-    };
-
-    this.unRegister = function() {
-        for (var i = 0; i < arguments.length; i++) {
-            registeredComponents.pop(arguments[i]);
-        }
-    };
-
     this.start = function() {
         generateMap(this.rows, this.cols, nBugs);
-        playerTurn();
+        emitEvents = true;
+        pieceQ = [new PlayerPiece()];
+        emit("gameInitialized", cells())
+        .then(playerTurn);
+
+    };
+
+    var gameOver = function() {
+        gameState = STATE.GAME_OVER;
+        emit("gameOver");
+        console.log("game over");
     };
 
     var playerTurn = function() {
         if (map[1][3] || map[1][4]) {
-            console.log("game over");
+            gameOver();
         } else {
-            piece = new PlayerPiece();
+            piece = pieceQ.shift();
+            piece.position = new Position(1, 3);
             piece.addToMap();
+
+            pieceQ.push(new PlayerPiece());
+            Events.emit("nowOnDeck", pieceQ[0].parts);
+
             gameState = STATE.PLAYER_CONTROL;
             playerTurnStep();
         }
@@ -364,7 +286,7 @@ var DrMarioGame = function(width, height, nBugs, pillQueue) {
                 if (kCells.length > 0) {
                     Promise.all(
                         kCells.map(function(cell) {
-                            cell.destroy();
+                            return cell.destroy();
                         })
                     ).then(function() {
                         physicsStep();
@@ -377,21 +299,15 @@ var DrMarioGame = function(width, height, nBugs, pillQueue) {
         }, gravityStep);
     };
 
-    // var killCells = function(kCells) {
-    //     for (var i = 0; i < kCells.length; i++) {
-
-    //     }
-    // };
-
     var PlayerPiece = function(parts) {
         this.parts = parts || [
-            new Cell(new Position(1,3), TYPE.LEFT),
-            new Cell(new Position(1,4), TYPE.RIGHT)
+            new Cell(null, TYPE.LEFT),
+            new Cell(null, TYPE.RIGHT)
         ];
 
         this.addToMap = function() {
-            this.parts[0].moveTo();
-            this.parts[1].moveTo();
+            this.parts[0].moveTo(new Position(1, 3));
+            this.parts[1].moveTo(new Position(1, 4));
         };
 
         this.move = function(mover) {

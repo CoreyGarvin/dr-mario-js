@@ -2,10 +2,11 @@
 (function Main() {
     var STAGE_WIDTH = window.innerWidth,
         STAGE_HEIGHT = window.innerHeight;
-    var METER = 80; // Pixels
+    var METER = 80; // Pixels per meter
     var cellSize = .25; // Meters
 
     var actors = [];
+    var onDeck
     var container, boardContainer, renderer, graphics;
     var world, mouseJoint;
     var touchX, touchY;
@@ -16,16 +17,39 @@
     var gameBoardOffsetX = 0,
         gameBoardOffsetY = 0;
 
+    // Physics body definition
+    var cellBodyDef = new Box2D.Dynamics.b2BodyDef();
+    cellBodyDef.type = Box2D.Dynamics.b2Body.b2_dynamicBody;
+
+    var cellFixtureDef = new Box2D.Dynamics.b2FixtureDef();
+    cellFixtureDef.shape = new Box2D.Collision.Shapes.b2PolygonShape();
+    cellFixtureDef.density = 1;
+    cellFixtureDef.shape.SetAsBox(cellSize / 2, cellSize / 2);
+
 
     var Actor = function(cell, container, world) {
         var self = this;
-        this.useGamePosition = function() {
+        var cell = cell;
+        var widthScale = heightScale = 1;
+        var offsetX = offsetY = 0;
+        var sprite = null;
+        var physicsBody = null;
+        this.id = cell.id;
+        this.defaultPosition = null;
+
+        var useCellPosition = function() {
+            var position = cell.position || self.defaultPosition;
+            if (!position) {
+                return;
+            }
+
             var worldPosition = new Box2D.Common.Math.b2Vec2(
-                cell.position.col * cellSize + (cellSize / 2),
-                cell.position.row * cellSize + (cellSize / 2)
+                position.col * cellSize + (cellSize / 2),
+                position.row * cellSize + (cellSize / 2)
             );
-            physicsBody.SetPositionAndAngle(
-                worldPosition, cell.type.rotation);
+
+            physicsBody && physicsBody.SetPositionAndAngle(
+                    worldPosition, cell.type.rotation);
 
             // Experimenting with tweening
             sprite.position.x += (worldPosition.x * METER + offsetX - sprite.position.x) / 2;
@@ -45,6 +69,42 @@
             // sprite.rotation = cell.type.rotation;
 
         };
+
+        var usePhysicsBodyPosition = function() {
+            if (!physicsBody && !initPhysics()) {
+                return;
+            }
+            var physicsBodyPosition = physicsBody.GetPosition();
+            sprite.position.set(
+                physicsBodyPosition.x * METER,
+                physicsBodyPosition.y * METER
+            );
+            sprite.rotation = physicsBody.GetAngle();
+        };
+        this.onUpdate = function() {
+            if (!sprite && !initGraphics()) {
+                return;
+            }
+            var side = cellSize * METER;
+            sprite.width += (side * widthScale - sprite.width) / 3;
+            sprite.height += (side * heightScale - sprite.height) / 3;
+            if (physicsEnabled) usePhysicsBodyPosition();
+            else                useCellPosition();
+        }
+        this.destroy = function(ms, then) {
+            sprite.alpha /= 2;
+            sprite.tint = 0xFFFFFF;
+            return new Promise(function(resolve) {
+                setTimeout(function() {
+                    container.removeChild(sprite);
+                    actors = actors.filter(function(actor) {return actor !== self;});
+                    sprite && sprite.destroy();
+                    physicsBody && world.DestroyBody(physicsBody);
+                    resolve();
+                }, 1000);
+            });
+        };
+
         this.squishLeft = function(f) {
             var tmp = widthScale;
             widthScale = 0.95;
@@ -54,64 +114,38 @@
                 offsetX = 0;
             }, 100);
         };
-        this.usePhysicsBodyPosition = function() {
-            var physicsBodyPosition = physicsBody.GetPosition();
-            sprite.position.set(
-                physicsBodyPosition.x * METER,
-                physicsBodyPosition.y * METER
+
+        var initPhysics = function() {
+            if (!cell.position) {
+                return false;
+            }
+            // Physics body
+            cellBodyDef.position.Set(
+                cell.position.col * cellSize + (cellSize / 2),
+                cell.position.row * cellSize + (cellSize / 2)
             );
-            sprite.rotation = physicsBody.GetAngle();
-        };
-        this.onUpdate = function() {
-            var side = cellSize * METER;
-            sprite.width += (side * widthScale - sprite.width) / 3;
-            sprite.height += (side * heightScale - sprite.height) / 3;
-            if (physicsEnabled) this.usePhysicsBodyPosition();
-            else                this.useGamePosition();
-        }
-        this.destroy = function(ms, then) {
-            sprite.alpha /= 2;
-            sprite.tint = 0xFFFFFF;
-            return new Promise(function(resolve) {
-                setTimeout(function() {
-                    container.removeChild(sprite);
-                    actors = actors.filter(function(actor) {return actor !== self;});
-                    sprite.destroy();
-                    world.DestroyBody(physicsBody);
-                    resolve();
-                }, 1000);
-            });
+            physicsBody = world.CreateBody(cellBodyDef);
+            physicsBody.CreateFixture(cellFixtureDef);
+            return true;
         };
 
-        this.id = cell.id;
+        var initGraphics = function() {
+            if (!cell.position && !self.defaultPosition) {
+                return false;
+            }
+            // Graphics
+            sprite = PIXI.Sprite.fromFrame(cell.type.frame);
+            sprite.tint = cell.color.value;
+
+            sprite.anchor.x = sprite.anchor.y = 0.5;
+            useCellPosition();
+            container.addChild(sprite);
+            return true;
+        };
+
+        initPhysics();
+        initGraphics();
         console.log("Actor ID " + this.id + " created");
-        var cell = cell;
-        var widthScale = heightScale = 1;
-        var offsetX = offsetY = 0;
-
-        // Physics body
-        var bodyDef = new Box2D.Dynamics.b2BodyDef();
-        bodyDef.type = Box2D.Dynamics.b2Body.b2_dynamicBody;
-        bodyDef.position.Set(
-            cell.position.col * cellSize + (cellSize / 2),
-            cell.position.row * cellSize + (cellSize / 2)
-        );
-        var physicsBody = world.CreateBody(bodyDef);
-
-        var fixtureDef = new Box2D.Dynamics.b2FixtureDef();
-        fixtureDef.shape = new Box2D.Collision.Shapes.b2PolygonShape();
-        fixtureDef.density = 1;
-        fixtureDef.shape.SetAsBox(cellSize / 2, cellSize / 2);
-        physicsBody.CreateFixture(fixtureDef);
-
-        // Graphics
-        var sprite = PIXI.Sprite.fromFrame(cell.type.frame);
-        sprite.tint = cell.color.value;
-        var bodyPosition = physicsBody.GetPosition();
-
-        sprite.anchor.x = sprite.anchor.y = 0.5;
-        this.useGamePosition()
-        container.addChild(sprite);
     };
 
 /*    var board = [
@@ -200,9 +234,28 @@
 
         var game = new DrMarioGame();
 
-        game.register(function() {
+        Events.register(function() {
+            var gameInitialized = function(cells) {
+                return new Promise(function(resolve) {
+                    cells.forEach(function(cell) {
+                        setTimeout(function() {
+                            cellCreated(cell);
+                        }, Math.floor(Math.random() * 3000));
+                    });
+                    setTimeout(function() {resolve();}, 3500);
+                });
+            };
+
             var cellCreated = function(cell) {
                 actors.push(new Actor(cell, boardContainer, world));
+            };
+
+            var nowOnDeck = function(cells) {
+                for (var i = 0; i < cells.length; i++) {
+                    var actor = actors.filter(function(a) {
+                        return a.id === cells[i].id;
+                    })[0].defaultPosition = new Position(1, 10 + i);
+                }
             };
 
             var cellDestroyed = function(cell) {
@@ -216,10 +269,17 @@
                 }
             };
 
+            var gameOver = function() {
+                physicsEnabled = true;
+            };
+
             return new Component("Graphics",
                 {
+                    gameInitialized: gameInitialized,
                     cellCreated: cellCreated,
                     cellDestroyed: cellDestroyed,
+                    nowOnDeck: nowOnDeck,
+                    gameOver: gameOver,
                 }
             );
         }());
@@ -247,6 +307,7 @@
         graphics.lineStyle(5, 0x993333);
         // draw a rectangle
         graphics.drawRect(-2.5, -2.5, game.cols * cellSize*METER + 20, game.rows * cellSize * METER + 20);
+        // graphics.drawRect((game.cols + 1) * cellSize*METER + 20, -2.5, 3 * cellSize * METER, 3 * cellSize * METER);
 
         var onWindowResize = function() {
             var STAGE_WIDTH = window.innerWidth,
@@ -258,7 +319,7 @@
 
             boardContainer.position.x = gameBoardOffsetX = renderer.width  / 2 - (cellSize * game.cols / 2 * METER) - (0*cellSize * METER / 4);
             boardContainer.position.y = gameBoardOffsetY = renderer.height / 2 - (cellSize * game.rows / 2 * METER) - (0*cellSize * METER/ 4);
-            graphics.width = (cellSize * game.cols * METER + 12.5);
+            graphics.width = (cellSize * (game.cols) * METER + 12.5);
             graphics.height = (cellSize * game.rows * METER + 12.5);
         };
 
