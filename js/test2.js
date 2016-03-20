@@ -254,7 +254,7 @@
                 for (var i = 0; i < cells.length; i++) {
                     var actor = actors.filter(function(a) {
                         return a.id === cells[i].id;
-                    })[0].defaultPosition = new Position(1, 10 + i);
+                    })[0].defaultPosition = new Position(1, 9.6 + i);
                 }
             };
 
@@ -307,19 +307,19 @@
         graphics.lineStyle(5, 0x993333);
         // draw a rectangle
         graphics.drawRect(-2.5, -2.5, game.cols * cellSize*METER + 20, game.rows * cellSize * METER + 20);
-        // graphics.drawRect((game.cols + 1) * cellSize*METER + 20, -2.5, 3 * cellSize * METER, 3 * cellSize * METER);
+        graphics.drawRect((game.cols + 1) * cellSize*METER + 20, -2.5, 3 * cellSize * METER, 3 * cellSize * METER);
 
         var onWindowResize = function() {
             var STAGE_WIDTH = window.innerWidth,
                 STAGE_HEIGHT = window.innerHeight;
-            METER = STAGE_HEIGHT / (cellSize * (game.rows + 5));
+            METER = STAGE_HEIGHT / (cellSize * (game.rows + 2));
             // renderer.width = STAGE_WIDTH;
             // renderer.height = STAGE_HEIGHT;
             renderer.resize(STAGE_WIDTH,STAGE_HEIGHT)
 
             boardContainer.position.x = gameBoardOffsetX = renderer.width  / 2 - (cellSize * game.cols / 2 * METER) - (0*cellSize * METER / 4);
             boardContainer.position.y = gameBoardOffsetY = renderer.height / 2 - (cellSize * game.rows / 2 * METER) - (0*cellSize * METER/ 4);
-            graphics.width = (cellSize * (game.cols) * METER + 12.5);
+            graphics.width = (cellSize * (game.cols + 4) * METER + 12.5);
             graphics.height = (cellSize * game.rows * METER + 12.5);
         };
 
