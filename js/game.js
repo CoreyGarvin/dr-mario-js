@@ -1,27 +1,35 @@
+var cellsCreated = 0;
+var logError = function(err) {
+    console.err(err);
+};
+
 var DrMarioGame = function(config) {
     var game = this;
     var config = config || {};
 
     game.map = null;
-    var piece = null;
+    var piece = config.piece || null;
     var pieceQ = config.pieceQ || [];
-    var cellsCreated = 0;
-    var gameState = 0;
+    game.state = 0;
     var turnTimer = null;
     var gravityStep = config.gravityStep || 600;
-    // var emitEvents = false;
-    // game.eventEmitter = Events;
     game.rows = config.rows || 17;
     game.cols = config.cols || 8;
     var nBugs = config.nBugs || 30;
 
     game.copy = function() {
+        var cells = game.map.cells.map(function(cell) {return cell.copy();});
+        var cpyPiece = piece == null ? null : new PlayerPiece(cells.filter(function(cell) {
+            return cell.position.equals(piece.parts[0].position) ||
+                   cell.position.equals(piece.parts[1].position);
+        }));
         return new DrMarioGame({
-            cells: game.map.cells.map(function(cell) {return cell.copy();}),
+            cells: cells,
             rows: game.rows,
             cols: game.cols,
             nBugs: nBugs,
-            pieceQ: pieceQ
+            piece: cpyPiece,
+            // pieceQ: pieceQ.map(function(piece) {return piece.copy();})
         });
     };
 
@@ -33,7 +41,7 @@ var DrMarioGame = function(config) {
     };
 
     // Simple event system
-    game.events = new EventSystem();
+    game.events = new EventSystem("Game");
 
     // A game piece
     var Cell = function(position, type, color, disableEmit) {
@@ -44,7 +52,7 @@ var DrMarioGame = function(config) {
         this.id = cellsCreated++;
         this.copy = function() {
             return new Cell(
-                new Position(this.position.x, this.position.y),
+                this.position == null ? null : new Position(this.position.row, this.position.col),
                 this.type, this.color, true);
         };
         if (!disableEmit) {
@@ -55,9 +63,9 @@ var DrMarioGame = function(config) {
     // Data structure for game board layout
     var Map = function(cells) {
         var map = this;
+        map.cells = [];
         map.rows = game.rows;
         map.cols = game.cols;
-        map.cells = cells || [];
 
         map.inBounds = function(pos) {
             return (pos.row >= 0 && pos.row < map.rows) &&
@@ -244,8 +252,22 @@ var DrMarioGame = function(config) {
                 });
             }
         };
+
+        var inita = function() {
+            while (map.cells.length < 104) {
+                map.add(new Cell(randomBlankPosition(4)));
+            }
+            map.cells.filter(function(cell){
+                return [cell.position.row-1,cell.position.row,cell.position.row].indexOf(Math.floor(cell.position.col)) != -1;
+                // return cell.position.col == 2 || cell.position.row == 7 || (cell.position.row >=6 && cell.position.col ==6);
+                // return [2,6].indexOf(cell.position.col) != -1 || cell.position.row == 8;
+            }).forEach(function(cell) {
+                cell.destroy();
+            });
+        };
+
         // Generate board or use predefined cells
-        if (map.cells.length == 0) {
+        if ((cells || []).length == 0) {
             init();
         } else {
             map.add(cells);
@@ -257,12 +279,13 @@ var DrMarioGame = function(config) {
         game.events.enabled = true;
         // emitEvents = true;
         pieceQ = [new PlayerPiece()];
-        game.events.emit("gameInitialized", this)
-        .then(playerTurn);
+
+        var prom = game.events.emit("gameInitialized", this);
+        prom.then(playerTurn, logError);
     };
 
     var gameOver = function() {
-        gameState = STATE.GAME_OVER;
+        game.state = STATE.GAME_OVER;
         game.events.emit("gameOver");
         console.log("game over");
     };
@@ -272,15 +295,15 @@ var DrMarioGame = function(config) {
             gameOver();
         } else {
             piece = pieceQ.shift();
-            piece.position = new Position(1, 3);
+            // piece.position = new Position(1, 3);
             piece.addToMap();
 
             pieceQ.push(new PlayerPiece());
             game.events.emit("nowOnDeck", pieceQ[0].parts);
 
-            gameState = STATE.PLAYER_CONTROL;
-            game.events.emit("playerTurn");
-            playerTurnStep();
+            game.state = STATE.PLAYER_CONTROL;
+            game.events.emit("playerTurn")
+            .then(playerTurnStep, logError);
         }
     };
 
@@ -296,7 +319,7 @@ var DrMarioGame = function(config) {
     };
 
     var physicsTurn = function() {
-        gameState = STATE.PHYSICS_CONTROL;
+        game.state = STATE.PHYSICS_CONTROL;
         clearTimeout(turnTimer);
         physicsStep();
     };
@@ -340,10 +363,44 @@ var DrMarioGame = function(config) {
 
 
     var PlayerPiece = function(parts) {
-        this.parts = parts || [
-            new Cell(null, TYPE.LEFT),
-            new Cell(null, TYPE.RIGHT)
-        ];
+        var self = this;
+
+        var init = function() {
+            self.parts = parts || [
+                new Cell(null, TYPE.LEFT),
+                new Cell(null, TYPE.RIGHT)
+            ];
+            sort();
+        };
+
+        var sort = function() {
+
+            if (self.parts[0].position == null || self.parts[1].position == null) {
+                return;
+            }
+            // Ensure parts[0] is the most lower-right cells
+            self.parts.sort(function(a,b) {
+                return b.position.row - a.position.row ||
+                a.position.col - b.position.col;
+            });
+            // Set cells types
+            if (isHorz()) {
+                self.parts[0].type = TYPE.LEFT;
+                self.parts[1].type = TYPE.RIGHT;
+            } else {
+                self.parts[0].type = TYPE.BOTTOM;
+                self.parts[1].type = TYPE.TOP;
+            }
+        };
+
+        this.copy = function() {
+            return new PlayerPiece(this.parts.map(function(part) {return part.copy();}));
+        };
+
+        var isHorz = function() {
+            // return self.parts[0].type === TYPE.LEFT;
+            return self.parts[0].position.row === self.parts[1].position.row;
+        };
 
         this.addToMap = function() {
             this.parts[0].position = new Position(1, 3);
@@ -361,8 +418,18 @@ var DrMarioGame = function(config) {
             return false;
         };
 
+        this.warpTo = function(position) {
+            var otherPos = isHorz() ? position.toRight() : position.above();
+            if (this.parts[0].moveTo(position, true) && this.parts[1].moveTo(otherPos, true)) {
+                this.parts[0].moveTo(position);
+                this.parts[1].moveTo(otherPos)
+                return true;
+            }
+            return false;
+        };
+
         this.rotate = function(cc) {
-            var horz = this.parts[0].position.row === this.parts[1].position.row;
+            var horz = isHorz();
             // Horizontal -> Vertical rotation
             if (horz) {
                 // Default unobstructed
@@ -392,23 +459,12 @@ var DrMarioGame = function(config) {
                 this.parts[0].moveTo(this.parts[1].position, false, true);
                 this.parts[1].moveTo(tmp, false, true);
             }
-            // Ensure parts[0] is the most lower-right cells
-            this.parts.sort(function(a,b) {
-                return b.position.row - a.position.row ||
-                a.position.col - b.position.col;
-            });
-            // Set cells types
-            if (horz) {
-                this.parts[0].type = TYPE.BOTTOM;
-                this.parts[1].type = TYPE.TOP;
-            } else {
-                this.parts[0].type = TYPE.LEFT;
-                this.parts[1].type = TYPE.RIGHT;
-            }
+            sort();
             return true;
         };
+        init();
     };
-    var ifPlayerTurn = function(func) {return function() {return gameState == STATE.PLAYER_CONTROL && func.apply(this, arguments);}};
+    var ifPlayerTurn = function(func) {return function() {return game.state == STATE.PLAYER_CONTROL && func.apply(this, arguments);}};
     this.playerControls = {
         left:  ifPlayerTurn(function() {return piece.move("moveLeft");}),
         right: ifPlayerTurn(function() {return piece.move("moveRight");}),
@@ -419,6 +475,7 @@ var DrMarioGame = function(config) {
                 physicsTurn();
             }
         }),
+        warp: ifPlayerTurn(function(pos) {return piece.warpTo(pos);}),
         rotate: ifPlayerTurn(function(cc) {return piece.rotate(cc);})
     };
     game.map = new Map(config.cells);

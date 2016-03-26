@@ -104,7 +104,7 @@ var Component = function(name, handlers) {
             var msg = ("\tACCEPTED:\t" + this.name);
             var p = handlers[event].apply(this, arguments);
             if (p instanceof Object && p.hasOwnProperty("then")) {
-                log(msg + "success(Promise)");
+                log(msg + "\tsuccess(Promise)");
                 return p;
             } else {
                 log(msg + "\tsuccess(" + (p == null ? "" : p) + ")");
@@ -117,7 +117,7 @@ var Component = function(name, handlers) {
 };
 
 // Simple event system
-var EventSystem = function(enabled) {
+var EventSystem = function(name, enabled) {
     var registeredComponents = [];
     // Notifies all registered components of the new game state ()
     this.enabled = enabled || false;
@@ -137,7 +137,7 @@ var EventSystem = function(enabled) {
             return Promise.resolve();
         }
         var args = arguments;
-        log("\n" + arguments[0]);
+        log("\n" + name + ": " + arguments[0]);
         return Promise.all(registeredComponents.map(function(component) {
             return component.handleEvent.apply(component, args);
         }));

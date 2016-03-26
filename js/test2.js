@@ -32,7 +32,8 @@
     cellFixtureDef.shape.SetAsBox(cellSize / 2, cellSize / 2);
 
 
-    var Actor = function(cell, container, world) {
+    var Actor = function(cell, container, world, animated) {
+        animated = animated !== false;
         var self = this;
         var cell = cell;
         var widthScale = heightScale = 1;
@@ -59,8 +60,13 @@
             }
 
             // Experimenting with tweening
-            sprite.position.x += (worldPosition.x * METER + offsetX - sprite.position.x) / 2;
-            sprite.position.y += (worldPosition.y * METER + offsetY - sprite.position.y) / 2;
+            if (animated) {
+                sprite.position.x += (worldPosition.x * METER + offsetX - sprite.position.x) / 2;
+                sprite.position.y += (worldPosition.y * METER + offsetY - sprite.position.y) / 2;
+            } else {
+                sprite.position.x = worldPosition.x * METER + offsetX;
+                sprite.position.y = worldPosition.y * METER + offsetY;
+            }
             // sprite.position.set(
             //     worldPosition.x * METER,
             //     worldPosition.y * METER
@@ -93,23 +99,32 @@
                 return;
             }
             var side = cellSize * METER;
-            sprite.width += (side * widthScale - sprite.width) / 3;
-            sprite.height += (side * heightScale - sprite.height) / 3;
+            if (animated) {
+                sprite.width += (side * widthScale - sprite.width) / 3;
+                sprite.height += (side * heightScale - sprite.height) / 3;
+            } else {
+                sprite.width = (side * widthScale);
+                sprite.height = (side * heightScale);
+            }
             if (physicsEnabled) usePhysicsBodyPosition();
             else                useCellPosition();
         }
         this.destroy = function(ms, then) {
+            if (!animated) return destroyNow();
             sprite.alpha /= 2;
             sprite.tint = 0xFFFFFF;
             return new Promise(function(resolve) {
                 setTimeout(function() {
-                    container.removeChild(sprite);
-                    actors = actors.filter(function(actor) {return actor !== self;});
-                    sprite && sprite.destroy();
-                    physicsBody && world.DestroyBody(physicsBody);
+                    destroyNow();
                     resolve();
                 }, 1000);
             });
+        };
+        var destroyNow = function() {
+            container.removeChild(sprite);
+            actors = actors.filter(function(actor) {return actor !== self;});
+            sprite && sprite.destroy();
+            physicsBody && world.DestroyBody(physicsBody);
         };
 
         this.squishLeft = function(f) {
@@ -243,23 +258,34 @@
         bodyDef.type = Box2D.Dynamics.b2Body.b2_staticBody;
 
         var game = new DrMarioGame();
-        // var cpuPlayer = new CpuPlayer(game);
-        // cpuPlayer.events.register(function() {
-        //     var gameInitialized = function(game) {
-        //         game.map.cells.forEach(function(cell) {
-        //             cellCreated(cell);
-        //         });
-        //     };
+        if (true) {
+            var cpuPlayer = new CpuPlayer(game);
+            cpuPlayer.events.register(function() {
+                var simActors = [];
+                var gameStateRefresh = function(g) {
+                    // Remove previous actors before generating new
+                    actors.filter(function(actor) {
+                        return simActors.indexOf(actor) != -1;
+                    }).forEach(function(actor) {actor.destroy();});
 
-        //     var cellCreated = function(cell) {
-        //         actors.push(new Actor(cell, simContainer, null));
-        //     };
+                    g.map.cells.forEach(function(cell) {
+                        cellCreated(cell);
+                    });
+                    console.log("Length: " + actors.length);
+                };
 
-        //     return new Component("SimGraphics", {
-        //         gameInitialized: gameInitialized,
-        //         cellCrea    ted: cellCreated
-        //     });
-        // }());
+                var cellCreated = function(cell) {
+                    var act = new Actor(cell, simContainer, null, false);
+                    actors.push(act);
+                    simActors.push(act);
+                };
+
+                return new Component("SimGraphics", {
+                    gameStateRefresh: gameStateRefresh,
+                    cellCreated: cellCreated
+                });
+            }());
+        }
 
         game.events.register(function() {
             var gameInitialized = function(game) {
@@ -349,6 +375,30 @@
             3 * cellSize * METER+ lineWidth*METER/2
         );
 
+        // Draw game border 2
+        graphics2 = new PIXI.Graphics();
+        graphics2.alpha = 0.9;
+        // graphics.beginFill(0x333333);
+        // set the line style to have a width of 5 and set the color to red
+        var lineWidth = .15;
+        graphics2.lineStyle(lineWidth*METER, 0x333333);
+        graphics2.beginFill(0x000000, 1);
+        // draw a rectangle
+        graphics2.drawRect(
+            -lineWidth*METER/2,
+            -lineWidth*METER/2 + (cellSize * METER/2),
+            lineWidth*METER/2 + (game.cols * cellSize*METER),
+            lineWidth*METER/2 + (game.rows - 0) * (cellSize * METER)
+        );
+        // Preview piece
+        graphics2.drawRect(
+            (game.cols + 1) * cellSize*METER + lineWidth/2*METER,
+            -lineWidth*METER/2 + (cellSize * METER/2),
+            3 * cellSize * METER + lineWidth*METER/2,
+            3 * cellSize * METER+ lineWidth*METER/2
+        );
+        simContainer.addChild(graphics2);
+
         var onWindowResize = function() {
             var STAGE_WIDTH = window.innerWidth,
                 STAGE_HEIGHT = window.innerHeight;
@@ -357,7 +407,7 @@
             // renderer.height = STAGE_HEIGHT;
             renderer.resize(STAGE_WIDTH,STAGE_HEIGHT)
 
-            boardContainer.position.x = gameBoardOffsetX = renderer.width  / 2 - (cellSize * game.cols / 2 * METER) - (0*cellSize * METER / 4);
+            boardContainer.position.x = gameBoardOffsetX = renderer.width  / 1.5 - (cellSize * game.cols / 2 * METER) - (0*cellSize * METER / 4);
             boardContainer.position.y = gameBoardOffsetY = renderer.height / 2 - (cellSize * game.rows / 2 * METER) - (1*cellSize * METER/2);
 
             simContainer.position.x = simContainer.position.y = 30;
@@ -368,6 +418,9 @@
 
             graphics.width = lineWidth*METER*4 + ((game.cols+4) * cellSize*METER);
             graphics.height = lineWidth*METER/2 + (game.rows - 0) * (cellSize * METER);
+
+            graphics2.width = graphics.width;
+            graphics2.height = graphics.height;
 
             waterWaves.width = bg.width = STAGE_WIDTH;
             waterWaves.height = bg.height = STAGE_HEIGHT;
@@ -411,6 +464,7 @@
                     console.log(e.keyCode);
             }
         };
+        // simContainer.addChild(graphics2);
         boardContainer.addChild(graphics);
         container.addChild(boardContainer);
         container.addChild(simContainer);
