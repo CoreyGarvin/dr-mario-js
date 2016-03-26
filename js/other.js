@@ -46,9 +46,9 @@ var ColorPalette = function(colors) {
 };
 
 const bugPalette = new ColorPalette({
-    RED:    {name: "Red",    value: 0xFF0000},
-    YELLOW: {name: "Yellow", value: 0xFFFF00},
-    BLUE:   {name: "Blue",   value: 0x0000FF},
+    RED:    {name: "Red",    value: 0xDD2222},
+    YELLOW: {name: "Yellow", value: 0xDDDD22},
+    BLUE:   {name: "Blue",   value: 0x2222DD},
 });
 
 const TYPE = {
@@ -116,31 +116,33 @@ var Component = function(name, handlers) {
     };
 };
 
-var Events = (function() {
+// Simple event system
+var EventSystem = function(enabled) {
     var registeredComponents = [];
     // Notifies all registered components of the new game state ()
-    return {
-        register: function() {
-            for (var i = 0; i < arguments.length; i++) {
-                registeredComponents.push(arguments[i]);
-            }
-        },
-        unRegister: function() {
-            for (var i = 0; i < arguments.length; i++) {
-                registeredComponents.pop(arguments[i]);
-            }
-        },
-        emit: function() {
-            var args = arguments;
-            log("\n" + arguments[0]);
-            return Promise.all(registeredComponents.map(function(component) {
-                return component.handleEvent.apply(component, args);
-            }));
+    this.enabled = enabled || false;
+    this.register = function() {
+        for (var i = 0; i < arguments.length; i++) {
+            registeredComponents.push(arguments[i]);
         }
     };
-} ());
-
-
+    // Untested
+    this.unRegister = function() {
+        registeredComponents = registeredComponents.filter(function(cmpt) {
+            return arguments.indexOf(cmpt) == -1;
+        });
+    };
+    this.emit = function() {
+        if (!this.enabled) {
+            return Promise.resolve();
+        }
+        var args = arguments;
+        log("\n" + arguments[0]);
+        return Promise.all(registeredComponents.map(function(component) {
+            return component.handleEvent.apply(component, args);
+        }));
+    };
+};
 
 var killablesOld = function(n) {
     var output = {};

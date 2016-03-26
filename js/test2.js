@@ -7,12 +7,17 @@
 
     var actors = [];
     var onDeck
-    var container, boardContainer, renderer, graphics;
+    var container, boardContainer, simContainer, renderer, graphics;
     var world, mouseJoint;
     var touchX, touchY;
     var isBegin;
     var stats;
     var physicsEnabled = false;
+
+    var displacementFilter = null;
+    var displacementTexture = null;
+    var waterWaves = null;
+    var bg = null;
 
     var gameBoardOffsetX = 0,
         gameBoardOffsetY = 0;
@@ -48,8 +53,10 @@
                 position.row * cellSize + (cellSize / 2)
             );
 
-            physicsBody && physicsBody.SetPositionAndAngle(
+            if (physicsBody) {
+                physicsBody.SetPositionAndAngle(
                     worldPosition, cell.type.rotation);
+            }
 
             // Experimenting with tweening
             sprite.position.x += (worldPosition.x * METER + offsetX - sprite.position.x) / 2;
@@ -116,7 +123,7 @@
         };
 
         var initPhysics = function() {
-            if (!cell.position) {
+            if (!cell.position || !world) {
                 return false;
             }
             // Physics body
@@ -136,7 +143,7 @@
             // Graphics
             sprite = PIXI.Sprite.fromFrame(cell.type.frame);
             sprite.tint = cell.color.value;
-
+            // sprite.filters = [displacementFilter];
             sprite.anchor.x = sprite.anchor.y = 0.5;
             useCellPosition();
             container.addChild(sprite);
@@ -145,29 +152,8 @@
 
         initPhysics();
         initGraphics();
-        console.log("Actor ID " + this.id + " created");
+        // console.log("Actor ID " + this.id + " created");
     };
-
-/*    var board = [
-        [ 0,  0,  0,  0,  0,  0,  0,  6],
-        [ 0,  0,  0,  0,  0,  0,  0,  6],
-        [ 0,  0,  0,  0,  0,  0,  0,  6],
-        [ 0,  0,  0,  0,  0,  0,  0,  6],
-        [ 6,  0, 12,  0, 12, 12, 12,  6],
-        [ 0,  6,  6, 18, 12, 18,  0,  6],
-        [ 0,  6, 12,  0, 18,  0, 18,  0],
-        [12, 12, 12,  0, 18, 12, 12, 18],
-        [ 6, 12,  6, 12,  6,  6, 12, 18],
-        [12, 12, 12,  6, 12,  6,  0, 12],
-        [ 6, 18, 12,  0, 18,  0,  0,  0],
-        [12, 12,  6, 18, 12, 18, 18, 12],
-        [18, 12,  6, 18, 12,  0,  6,  0],
-        [ 6,  0, 12,  6, 18,  6, 18, 18],
-        [ 0, 12,  0, 18, 18,  0,  6, 18],
-        [18, 18,  0,  0,  6, 18,  0,  0],
-        [ 6, 12,  6, 18, 12, 12, 18,  6],
-    ];*/
-    // board = game.cells;
 
     (function init() {
         if (!window.requestAnimationFrame) {
@@ -199,6 +185,9 @@
         // Container for the gameboard
         boardContainer = new PIXI.Container();
 
+        simContainer = new PIXI.Container();
+        
+
         var options = {
             // view: document.getElementById("canvas"),
             transparent: false,
@@ -209,6 +198,27 @@
         renderer = PIXI.autoDetectRenderer(STAGE_WIDTH, STAGE_HEIGHT, options, false);
         renderer.autoResize = true;
         document.body.appendChild(renderer.view);
+
+        // try graphics
+        displacementTexture = PIXI.Sprite.fromImage("images/displacement_map.jpg");
+        displacementFilter = new PIXI.filters.DisplacementFilter(displacementTexture);
+        displacementFilter.scale.x = 50;
+        displacementFilter.scale.y = 50;
+
+        var pondContainer = new PIXI.Container();
+        pondContainer.addChild(displacementTexture);
+        pondContainer.filters = [displacementFilter];
+        // container.addChild(pondContainer);
+
+        bg = PIXI.Sprite.fromImage("images/displacement_BG.jpg");
+        bg.scale.x = bg.scale.y = 2
+        pondContainer.addChild(bg);
+
+        waterWaves = new PIXI.extras.TilingSprite(PIXI.Texture.fromImage("images/zeldaWaves.png"), 630, 410);
+        waterWaves.scale.x = waterWaves.scale.y = 1.3;
+        waterWaves.alpha = 0.1//0.2
+        pondContainer.addChild(waterWaves);
+        // boardContainer.filters = [displacementFilter];
 
         // load resources
         PIXI.loader
@@ -233,11 +243,28 @@
         bodyDef.type = Box2D.Dynamics.b2Body.b2_staticBody;
 
         var game = new DrMarioGame();
+        // var cpuPlayer = new CpuPlayer(game);
+        // cpuPlayer.events.register(function() {
+        //     var gameInitialized = function(game) {
+        //         game.map.cells.forEach(function(cell) {
+        //             cellCreated(cell);
+        //         });
+        //     };
 
-        Events.register(function() {
-            var gameInitialized = function(cells) {
+        //     var cellCreated = function(cell) {
+        //         actors.push(new Actor(cell, simContainer, null));
+        //     };
+
+        //     return new Component("SimGraphics", {
+        //         gameInitialized: gameInitialized,
+        //         cellCrea    ted: cellCreated
+        //     });
+        // }());
+
+        game.events.register(function() {
+            var gameInitialized = function(game) {
                 return new Promise(function(resolve) {
-                    cells.forEach(function(cell) {
+                    game.map.cells.forEach(function(cell) {
                         setTimeout(function() {
                             cellCreated(cell);
                         }, Math.floor(Math.random() * 3000));
@@ -301,13 +328,26 @@
 
         // Draw game border
         graphics = new PIXI.Graphics();
-        graphics.alpha = 0.6;
+        graphics.alpha = 0.9;
         // graphics.beginFill(0x333333);
         // set the line style to have a width of 5 and set the color to red
-        graphics.lineStyle(5, 0x993333);
+        var lineWidth = .15;
+        graphics.lineStyle(lineWidth*METER, 0x333333);
+        graphics.beginFill(0x000000, 1);
         // draw a rectangle
-        graphics.drawRect(-2.5, -2.5, game.cols * cellSize*METER + 20, game.rows * cellSize * METER + 20);
-        graphics.drawRect((game.cols + 1) * cellSize*METER + 20, -2.5, 3 * cellSize * METER, 3 * cellSize * METER);
+        graphics.drawRect(
+            -lineWidth*METER/2,
+            -lineWidth*METER/2 + (cellSize * METER/2),
+            lineWidth*METER/2 + (game.cols * cellSize*METER),
+            lineWidth*METER/2 + (game.rows - 0) * (cellSize * METER)
+        );
+        // Preview piece
+        graphics.drawRect(
+            (game.cols + 1) * cellSize*METER + lineWidth/2*METER,
+            -lineWidth*METER/2 + (cellSize * METER/2),
+            3 * cellSize * METER + lineWidth*METER/2,
+            3 * cellSize * METER+ lineWidth*METER/2
+        );
 
         var onWindowResize = function() {
             var STAGE_WIDTH = window.innerWidth,
@@ -318,9 +358,20 @@
             renderer.resize(STAGE_WIDTH,STAGE_HEIGHT)
 
             boardContainer.position.x = gameBoardOffsetX = renderer.width  / 2 - (cellSize * game.cols / 2 * METER) - (0*cellSize * METER / 4);
-            boardContainer.position.y = gameBoardOffsetY = renderer.height / 2 - (cellSize * game.rows / 2 * METER) - (0*cellSize * METER/ 4);
-            graphics.width = (cellSize * (game.cols + 4) * METER + 12.5);
-            graphics.height = (cellSize * game.rows * METER + 12.5);
+            boardContainer.position.y = gameBoardOffsetY = renderer.height / 2 - (cellSize * game.rows / 2 * METER) - (1*cellSize * METER/2);
+
+            simContainer.position.x = simContainer.position.y = 30;
+
+            // graphics.position.y = cellSize * METER;
+            // graphics.width = (cellSize * (game.cols + 4) * METER);
+            // graphics.height = (cellSize * (game.rows-1) * METER);
+
+            graphics.width = lineWidth*METER*4 + ((game.cols+4) * cellSize*METER);
+            graphics.height = lineWidth*METER/2 + (game.rows - 0) * (cellSize * METER);
+
+            waterWaves.width = bg.width = STAGE_WIDTH;
+            waterWaves.height = bg.height = STAGE_HEIGHT;
+
         };
 
         window.addEventListener("resize", onWindowResize);
@@ -360,14 +411,9 @@
                     console.log(e.keyCode);
             }
         };
-
-
-        // var cells = game.cells();
-        // for (var i = 0; i < cells.length; i++) {
-        //     actors.push(new Actor(cells[i], boardContainer, world));
-        // }
         boardContainer.addChild(graphics);
         container.addChild(boardContainer);
+        container.addChild(simContainer);
 
         renderer.view.addEventListener("mousedown", function(event) {
             isBegin = true;
@@ -397,8 +443,7 @@
 
         update();
     }
-    // var gameBoardOffsetX = 0,
-    //     gameBoardOffsetY = 0;
+
     function onMove(event) {
         if (event["changedTouches"]) {
             var touche = event["changedTouches"][ 0];
@@ -435,7 +480,7 @@
     function update(t) {
         // console.log(t);
         requestAnimationFrame(update);
-        // METER = 80 + (10 * Math.sin(Date.now()/1000));
+        // METER = 80 + (50 * Math.sin(Date.now()/5000));
 
         if (isBegin && !mouseJoint) {
             const dragBody = getBodyAtMouse();
@@ -467,18 +512,22 @@
             actors[i].onUpdate();
         }
 
-        // // Position actors to match physics bodies
-        // const n = actors.length;
-        // for (var i = 0; i < n; i++) {
-        //     var body = bodies[i];
-        //     var actor = actors[i];
-        //     var position = body.GetPosition();
-        //     actor.position.x = position.x * METER;
-        //     actor.position.y = position.y * METER;
-        //     actor.width = cellSize * METER;
-        //     actor.height = cellSize * METER;
-        //     actor.rotation = body.GetAngle();
-        // }
+        // Extra gfx
+        if (displacementFilter) {
+            // displacementTexture.position.x += t/100;
+            displacementTexture.x += 1;
+            displacementTexture.y += 1;
+            // displacementTexture.scale.x = Math.sin(Date.now()/1000);
+
+            // displacementFilter.maskMatrix.r = t / 10;//blurAmount * 40;
+            // displacementFilter.maskMatrix.g = t / 10;
+            // displacementFilter.scale.x = 1+Math.sin(Date.now()/1000);
+        }
+        
+        waterWaves.tilePosition.x = t / -20;//blurAmount * 40;
+        waterWaves.tilePosition.y = t / -20;
+
+
         renderer.render(container);
         stats.update();
     }

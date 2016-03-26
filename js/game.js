@@ -1,18 +1,29 @@
-var DrMarioGame = function(width, height, nBugs, pillQueue) {
-    var self = this;
-    // 2d [] of Cells, list of cells
-    var map = null;
-    // var cells = null;
+var DrMarioGame = function(config) {
+    var game = this;
+    var config = config || {};
+
+    game.map = null;
     var piece = null;
-    var pieceQ = [];
+    var pieceQ = config.pieceQ || [];
     var cellsCreated = 0;
     var gameState = 0;
     var turnTimer = null;
-    var gravityStep = 600;
-    var emitEvents = false;
-    this.rows = height = height || 17;
-    this.cols = width = width || 8;
-    nBugs = nBugs || 90;
+    var gravityStep = config.gravityStep || 600;
+    // var emitEvents = false;
+    // game.eventEmitter = Events;
+    game.rows = config.rows || 17;
+    game.cols = config.cols || 8;
+    var nBugs = config.nBugs || 30;
+
+    game.copy = function() {
+        return new DrMarioGame({
+            cells: game.map.cells.map(function(cell) {return cell.copy();}),
+            rows: game.rows,
+            cols: game.cols,
+            nBugs: nBugs,
+            pieceQ: pieceQ
+        });
+    };
 
     const STATE = {
         PLAYER_CONTROL:  "Player's Turn",
@@ -21,59 +32,32 @@ var DrMarioGame = function(width, height, nBugs, pillQueue) {
         GAME_WON: "Game won"
     };
 
-    var emit = function() {
-        if (emitEvents) {
-            return Events.emit.apply(this, arguments);
-        }
-    };
-
-    // var cells = function() {
-    //     var output = [];
-    //     for(var row = 0; row < map.length; row++) {
-    //         for(var col = 0; col < map[row].length; col++) {
-    //             if (map[row][col]) {
-    //                 output.push(map[row][col]);
-    //             }
-    //         }
-    //     }
-    //     return output;
-    // }
+    // Simple event system
+    game.events = new EventSystem();
 
     // A game piece
-    var Cell = function(position, type, color) {
+    var Cell = function(position, type, color, disableEmit) {
         this.position = position || null;
         this.color = color || bugPalette.random();
         this.type = type || TYPE.BUG;
         this.destroyed = false;
         this.id = cellsCreated++;
-        emit("cellCreated", this);
+        this.copy = function() {
+            return new Cell(
+                new Position(this.position.x, this.position.y),
+                this.type, this.color, true);
+        };
+        if (!disableEmit) {
+            game.events.emit("cellCreated", this);
+        }
     };
 
-
-
-    // Returns a blank position on the map (random, with constraints)
-    // var randomBlankPosition = function(rowMin, rowMax, colMin, colMax) {
-    //     var pos;
-    //     do
-    //         pos = new Position (
-    //             getRandomInt(rowMin || 0, rowMax || map.length),
-    //             getRandomInt(colMin || 0, colMax || map[0].length)
-    //         );
-    //     while (map[pos.row][pos.col] != null);
-    //     return pos;
-    // };
-
-    // Generate 2d map of bugs
-    var Map = function(rows, cols, nBugs) {
+    // Data structure for game board layout
+    var Map = function(cells) {
         var map = this;
-        map.rows = rows;
-        map.cols = cols;
-        var cells = [];
-
-        map.cells = function() {
-            return cells;
-        }
-        // var arr = init1d(rows * cols, null);
+        map.rows = game.rows;
+        map.cols = game.cols;
+        map.cells = cells || [];
 
         map.inBounds = function(pos) {
             return (pos.row >= 0 && pos.row < map.rows) &&
@@ -85,7 +69,7 @@ var DrMarioGame = function(width, height, nBugs, pillQueue) {
             if (typeof pos == "number") {
                 pos = new Position(pos, col);
             }
-            var result = cells.filter(function(item) {
+            var result = map.cells.filter(function(item) {
                 return item.position.equals(pos);
             });
             if (result.length == 1) return result[0];
@@ -95,61 +79,65 @@ var DrMarioGame = function(width, height, nBugs, pillQueue) {
         };
 
         map.remove = function(cell) {
-            cells.splice(cells.indexOf(cell), 1);
+            map.cells.splice(map.cells.indexOf(cell), 1);
         };
 
-        map.add = function(cell) {
-            cell.moveTo = function(position, test, force, ignoreList) {
-                ignoreList = ignoreList || piece.parts;
-                force = force || false;
+        map.add = function(cells) {
+            var cells = cells.constructor === Array ? cells : [cells];
+            cells.forEach(function(cell) {
+                cell.moveTo = function(position, test, force, ignoreList) {
+                    ignoreList = ignoreList || piece.parts;
+                    force = force || false;
 
-                // Check bounds
-                if (!map.inBounds(position)) {
-                    return false;
-                }
-                if (force && test) {
+                    // Check bounds
+                    if (!map.inBounds(position)) {
+                        return false;
+                    }
+                    if (force && test) {
+                        return true;
+                    }
+                    // Check if space is already occupied
+                    var occupant = map.at(position);
+                    if (!force && occupant && ignoreList.indexOf(occupant) == -1) {
+                        return false;
+                    }
+                    // Move the cell
+                    if (!test) {
+                        this.position = position;
+                    }
                     return true;
-                }
-                // Check if space is already occupied
-                var occupant = map.at(position);
-                if (!force && occupant && ignoreList.indexOf(occupant) == -1) {
-                    return false;
-                }
-                // Move the cell
-                if (!test) {
-                    this.position = position;
-                }
-                return true;
-            };
-            cell.destroy = function() {
-                // necessary?
-                this.destroyed = true;
-                // Remove from map
-                map.remove(this);
-                // Remove from cells list
-                // cells.filter(function(cell) {
-                //     return this !== cell;
-                // });
-                if (this.type === TYPE.LEFT) map.at(this.position.toRight()).type = TYPE.ORPHAN;
-                if (this.type === TYPE.RIGHT) map.at(this.position.toLeft()).type = TYPE.ORPHAN;
-                if (this.type === TYPE.TOP) map.at(this.position.below()).type = TYPE.ORPHAN;
-                if (this.type === TYPE.BOTTOM) map.at(this.position.above()).type = TYPE.ORPHAN;
-                return emit("cellDestroyed", this);
-            };
+                };
+                cell.destroy = function() {
+                    // necessary?
+                    this.destroyed = true;
+                    // Remove from map
+                    map.remove(this);
+                    // Remove from cells list
+                    // cells.filter(function(cell) {
+                    //     return this !== cell;
+                    // });
+                    if (this.type === TYPE.LEFT) map.at(this.position.toRight()).type = TYPE.ORPHAN;
+                    if (this.type === TYPE.RIGHT) map.at(this.position.toLeft()).type = TYPE.ORPHAN;
+                    if (this.type === TYPE.TOP) map.at(this.position.below()).type = TYPE.ORPHAN;
+                    if (this.type === TYPE.BOTTOM) map.at(this.position.above()).type = TYPE.ORPHAN;
+                    return game.events.emit("cellDestroyed", this);
+                };
 
-            cell.moveUp = function(n, test, force, ignoreList) {
-                return this.moveTo(this.position.above(n), test, force, ignoreList);
-            };
-            cell.moveDown = function(n, test, force, ignoreList) {
-                return this.moveTo(this.position.below(n), test, force, ignoreList);
-            };
-            cell.moveLeft = function(n, test, force, ignoreList) {
-                return this.moveTo(this.position.toLeft(n), test, force, ignoreList);
-            };
-            cell.moveRight = function(n, test, force, ignoreList) {
-                return this.moveTo(this.position.toRight(n), test, force, ignoreList);
-            };
-            cells.push(cell);
+                cell.moveUp = function(n, test, force, ignoreList) {
+                    return this.moveTo(this.position.above(n), test, force, ignoreList);
+                };
+                cell.moveDown = function(n, test, force, ignoreList) {
+                    return this.moveTo(this.position.below(n), test, force, ignoreList);
+                };
+                cell.moveLeft = function(n, test, force, ignoreList) {
+                    return this.moveTo(this.position.toLeft(n), test, force, ignoreList);
+                };
+                cell.moveRight = function(n, test, force, ignoreList) {
+                    return this.moveTo(this.position.toRight(n), test, force, ignoreList);
+                };
+                map.cells.push(cell);
+            });
+
         };
 
         var randomBlankPosition = function(rowMin, rowMax, colMin, colMax) {
@@ -185,7 +173,7 @@ var DrMarioGame = function(width, height, nBugs, pillQueue) {
             // Function names for each direction of each axis
             [["above", "below"],["toLeft", "toRight"]]
             .forEach(function(axis) {
-                var pool = cells.slice();
+                var pool = map.cells.slice();
 
                 // Find streaks
                 while (pool.length > 0) {
@@ -218,7 +206,7 @@ var DrMarioGame = function(width, height, nBugs, pillQueue) {
         // Moves all eligable pieces downward
         map.settle = function(items) {
             // By default, use all cells that are not bugs (and have a position)
-            items = (items || cells).filter(function(cell) {
+            items = (items || map.cells).filter(function(cell) {
                 return cell.type !== TYPE.BUG && cell.position;
             });
             // Track if motion happened
@@ -249,46 +237,38 @@ var DrMarioGame = function(width, height, nBugs, pillQueue) {
         };
 
         var init = function() {
-            // var needs = nBugs;
-            // var iterations = 0;
-
-            // do {
-                // if (iterations++ > 10) break;
-                while (cells.length < nBugs) {
-                    map.add(new Cell(randomBlankPosition(4)));
-                }
-                // var kCells = killables(3);
-                // needs = kCells.length;
-                // kCells.map(function(cell) {
-                //     cell.destroy();
-                // })
-            // } while (needs > 0);
+            while (map.cells.length < nBugs) {
+                map.add(new Cell(randomBlankPosition(4)));
+                map.killables(3).forEach(function(cell) {
+                    cell.destroy();
+                });
+            }
         };
-        init();
+        // Generate board or use predefined cells
+        if (map.cells.length == 0) {
+            init();
+        } else {
+            map.add(cells);
+        }
     };
 
-
-
-
-
-    this.start = function() {
-        map = new Map(height, width, nBugs);
+    game.start = function() {
         // generateMap(this.rows, this.cols, nBugs);
-        emitEvents = true;
+        game.events.enabled = true;
+        // emitEvents = true;
         pieceQ = [new PlayerPiece()];
-        emit("gameInitialized", map.cells())
+        game.events.emit("gameInitialized", this)
         .then(playerTurn);
-
     };
 
     var gameOver = function() {
         gameState = STATE.GAME_OVER;
-        emit("gameOver");
+        game.events.emit("gameOver");
         console.log("game over");
     };
 
     var playerTurn = function() {
-        if (map.at(1, 3) || map.at(1, 4)) {
+        if (game.map.at(1, 3) || game.map.at(1, 4)) {
             gameOver();
         } else {
             piece = pieceQ.shift();
@@ -296,9 +276,10 @@ var DrMarioGame = function(width, height, nBugs, pillQueue) {
             piece.addToMap();
 
             pieceQ.push(new PlayerPiece());
-            Events.emit("nowOnDeck", pieceQ[0].parts);
+            game.events.emit("nowOnDeck", pieceQ[0].parts);
 
             gameState = STATE.PLAYER_CONTROL;
+            game.events.emit("playerTurn");
             playerTurnStep();
         }
     };
@@ -324,11 +305,11 @@ var DrMarioGame = function(width, height, nBugs, pillQueue) {
         clearTimeout(turnTimer);
         turnTimer = setTimeout(function() {
             // Settle while possible
-            if (map.settle()) {
+            if (game.map.settle()) {
                 physicsStep();
             // Then kill blocks, repeat
             } else {
-                var kCells = map.killables(4);
+                var kCells = game.map.killables(4);
                 // Kill cells, should resolve immediately if none
                 if (kCells.length > 0) {
                     Promise.all(
@@ -345,6 +326,19 @@ var DrMarioGame = function(width, height, nBugs, pillQueue) {
         }, gravityStep);
     };
 
+    var simulationHelpers = function() {
+        // settling of the board and destroy happen all in one shot
+        var physicsSimulation = function() {
+            var kCells = game.map.killables(4);
+            while(kCells.length > 0) {
+                kCells.forEach(function(cell) {cell.destroy();});
+                while(game.map.settle()) {}
+                kCells = game.map.killables(4);
+            }
+        };
+    };
+
+
     var PlayerPiece = function(parts) {
         this.parts = parts || [
             new Cell(null, TYPE.LEFT),
@@ -354,9 +348,8 @@ var DrMarioGame = function(width, height, nBugs, pillQueue) {
         this.addToMap = function() {
             this.parts[0].position = new Position(1, 3);
             this.parts[1].position = new Position(1, 4);
-            map.add(this.parts[0]);
-            map.add(this.parts[1]);
-
+            game.map.add(this.parts[0]);
+            game.map.add(this.parts[1]);
         };
 
         this.move = function(mover) {
@@ -396,8 +389,6 @@ var DrMarioGame = function(width, height, nBugs, pillQueue) {
             // swapping positions
             if ((horz && !cc) || (!horz && cc)) {
                 var tmp = this.parts[0].position;
-                // this.parts[0].position = this.parts[1].position;
-                // this.parts[1].position = tmp;
                 this.parts[0].moveTo(this.parts[1].position, false, true);
                 this.parts[1].moveTo(tmp, false, true);
             }
@@ -430,4 +421,5 @@ var DrMarioGame = function(width, height, nBugs, pillQueue) {
         }),
         rotate: ifPlayerTurn(function(cc) {return piece.rotate(cc);})
     };
+    game.map = new Map(config.cells);
 };
