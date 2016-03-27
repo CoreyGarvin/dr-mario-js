@@ -7,23 +7,26 @@ var DrMarioGame = function(config) {
     var game = this;
     var config = config || {};
 
+    this.name = config.name || "Game " + ++cellsCreated;
     game.map = null;
-    var piece = config.piece || null;
+    game.startPosition = new Position(1, 3);
+    game.piece = config.piece || null;
     var pieceQ = config.pieceQ || [];
     game.state = 0;
     var turnTimer = null;
-    var gravityStep = config.gravityStep || 600;
+    var gravityStep = config.gravityStep || 620;
     game.rows = config.rows || 17;
     game.cols = config.cols || 8;
-    var nBugs = config.nBugs || 30;
+    var nBugs = config.nBugs || 1;
 
     game.copy = function() {
         var cells = game.map.cells.map(function(cell) {return cell.copy();});
-        var cpyPiece = piece == null ? null : new PlayerPiece(cells.filter(function(cell) {
-            return cell.position.equals(piece.parts[0].position) ||
-                   cell.position.equals(piece.parts[1].position);
+        var cpyPiece = game.piece == null ? null : new PlayerPiece(cells.filter(function(cell) {
+            return cell.position.equals(game.piece.parts[0].position) ||
+                   cell.position.equals(game.piece.parts[1].position);
         }));
         return new DrMarioGame({
+            name: this.name + " Copy " + ++cellsCreated,
             cells: cells,
             rows: game.rows,
             cols: game.cols,
@@ -77,6 +80,11 @@ var DrMarioGame = function(config) {
             if (typeof pos == "number") {
                 pos = new Position(pos, col);
             }
+
+            if (!map.inBounds(pos)) {
+                return undefined;
+            }
+
             var result = map.cells.filter(function(item) {
                 return item.position.equals(pos);
             });
@@ -94,7 +102,7 @@ var DrMarioGame = function(config) {
             var cells = cells.constructor === Array ? cells : [cells];
             cells.forEach(function(cell) {
                 cell.moveTo = function(position, test, force, ignoreList) {
-                    ignoreList = ignoreList || piece.parts;
+                    ignoreList = ignoreList || game.piece.parts;
                     force = force || false;
 
                     // Check bounds
@@ -146,6 +154,12 @@ var DrMarioGame = function(config) {
                 map.cells.push(cell);
             });
 
+        };
+
+        map.bugs = function() {
+            return map.cells.filter(function(cell) {
+                return cell.type === TYPE.BUG;
+            });
         };
 
         var randomBlankPosition = function(rowMin, rowMax, colMin, colMax) {
@@ -294,9 +308,9 @@ var DrMarioGame = function(config) {
         if (game.map.at(1, 3) || game.map.at(1, 4)) {
             gameOver();
         } else {
-            piece = pieceQ.shift();
+            game.piece = pieceQ.shift();
             // piece.position = new Position(1, 3);
-            piece.addToMap();
+            game.piece.addToMap();
 
             pieceQ.push(new PlayerPiece());
             game.events.emit("nowOnDeck", pieceQ[0].parts);
@@ -310,7 +324,7 @@ var DrMarioGame = function(config) {
     var playerTurnStep = function() {
         clearTimeout(turnTimer);
         turnTimer = setTimeout(function() {
-            if (piece.move("moveDown")) {
+            if (game.piece.move("moveDown")) {
                 playerTurnStep();
             } else {
                 physicsTurn();
@@ -326,6 +340,10 @@ var DrMarioGame = function(config) {
 
     var physicsStep = function() {
         clearTimeout(turnTimer);
+        if (game.map.bugs().length == 0) {
+            return win();
+        }
+
         turnTimer = setTimeout(function() {
             // Settle while possible
             if (game.map.settle()) {
@@ -339,14 +357,17 @@ var DrMarioGame = function(config) {
                         kCells.map(function(cell) {
                             return cell.destroy();
                         })
-                    ).then(function() {
-                        physicsStep();
-                    });
+                    ).then(physicsStep);
                 } else {
                     playerTurn();
                 }
             }
         }, gravityStep);
+    };
+
+    var win = function() {
+        game.state = STATE.GAME_WON;
+        game.events.emit("win");
     };
 
     var simulationHelpers = function() {
@@ -371,6 +392,30 @@ var DrMarioGame = function(config) {
                 new Cell(null, TYPE.RIGHT)
             ];
             sort();
+        };
+
+        this.isSettled = function() {
+            var below = game.map.at(self.parts[0].position.below());
+            var belowBlocked = below === undefined || below != null;
+            if (isVert()) {
+                return belowBlocked;
+            } else {
+                return belowBlocked || game.map.at(self.parts[1].position.below()) != null;
+            }
+            // return game.map.at(self.parts[0].position.below()) != null &&
+            //     (isVert() || game.map.at(self.parts[1].position.below()) != null);
+        };
+        this.position = function() {
+            return self.parts[0].position;
+        };
+
+        this.isDouble = function() {
+            return self.parts[0].color === self.parts[1].color;
+        };
+
+        this.isRotatedLike = function(piece) {
+            return self.parts[0].type === piece.parts[0].type &&
+                self.parts[0].color === piece.parts[0].color;
         };
 
         var sort = function() {
@@ -402,6 +447,10 @@ var DrMarioGame = function(config) {
             return self.parts[0].position.row === self.parts[1].position.row;
         };
 
+        var isVert = function() {
+            return !isHorz();
+        };
+
         this.addToMap = function() {
             this.parts[0].position = new Position(1, 3);
             this.parts[1].position = new Position(1, 4);
@@ -428,55 +477,59 @@ var DrMarioGame = function(config) {
             return false;
         };
 
-        this.rotate = function(cc) {
-            var horz = isHorz();
-            // Horizontal -> Vertical rotation
-            if (horz) {
-                // Default unobstructed
-                if (!this.parts[1].moveTo(this.parts[0].position.above())) {
-                    // Try above-right
-                    if (this.parts[1].moveUp()) {
-                        this.parts[0].moveRight();
-                    // Try below
-                    } else if (!this.parts[1].moveTo(this.parts[0].position.below())) {
-                        // Try below-right
-                        if (this.parts[1].moveDown()) {
+        this.rotate = function(cc, n, force) {
+            n = n || 1;
+            force = force === true;
+            while(n--) {
+                var wasHorz = isHorz();
+                // Horizontal -> Vertical rotation
+                if (wasHorz) {
+                    // Default unobstructed
+                    if (!this.parts[1].moveTo(this.parts[0].position.above(), false, force)) {
+                        // Try above-right
+                        if (this.parts[1].moveUp()) {
                             this.parts[0].moveRight();
-                        } else return false;
+                        // Try below
+                        } else if (!this.parts[1].moveTo(this.parts[0].position.below())) {
+                            // Try below-right
+                            if (this.parts[1].moveDown()) {
+                                this.parts[0].moveRight();
+                            } else return false;
+                        }
                     }
+                // Vertical -> Horizontal, try right
+                } else if (!this.parts[1].moveTo(this.parts[0].position.toRight(), false, force)) {
+                    // Try shifting left
+                    if (this.parts[0].moveLeft()) {
+                        this.parts[1].moveDown();
+                    } else return false;
                 }
-            // Vertical -> Horizontal, try right
-            } else if (!this.parts[1].moveTo(this.parts[0].position.toRight())) {
-                // Try shifting left
-                if (this.parts[0].moveLeft()) {
-                    this.parts[1].moveDown();
-                } else return false;
+                // Achieve counter-clockwise rotation by
+                // swapping positions
+                if ((wasHorz && !cc) || (!wasHorz && cc)) {
+                    var tmp = this.parts[0].position;
+                    this.parts[0].moveTo(this.parts[1].position, false, true);
+                    this.parts[1].moveTo(tmp, false, true);
+                }
+                sort();
             }
-            // Achieve counter-clockwise rotation by
-            // swapping positions
-            if ((horz && !cc) || (!horz && cc)) {
-                var tmp = this.parts[0].position;
-                this.parts[0].moveTo(this.parts[1].position, false, true);
-                this.parts[1].moveTo(tmp, false, true);
-            }
-            sort();
             return true;
         };
         init();
     };
     var ifPlayerTurn = function(func) {return function() {return game.state == STATE.PLAYER_CONTROL && func.apply(this, arguments);}};
     this.playerControls = {
-        left:  ifPlayerTurn(function() {return piece.move("moveLeft");}),
-        right: ifPlayerTurn(function() {return piece.move("moveRight");}),
+        left:  ifPlayerTurn(function() {return game.piece.move("moveLeft");}),
+        right: ifPlayerTurn(function() {return game.piece.move("moveRight");}),
         down:  ifPlayerTurn(function() {
-            if (piece.move("moveDown")) {
+            if (game.piece.move("moveDown")) {
                 playerTurnStep();
             } else {
                 physicsTurn();
             }
         }),
-        warp: ifPlayerTurn(function(pos) {return piece.warpTo(pos);}),
-        rotate: ifPlayerTurn(function(cc) {return piece.rotate(cc);})
+        warp: ifPlayerTurn(function(pos) {return game.piece.warpTo(pos);}),
+        rotate: ifPlayerTurn(function(cc) {return game.piece.rotate(cc);})
     };
     game.map = new Map(config.cells);
 };

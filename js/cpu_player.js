@@ -3,6 +3,72 @@ var CpuPlayer = function(sourceGame) {
     self.events = new EventSystem("CpuPlayer", true);
     var sourceGame = sourceGame;
     var game = null;
+    var currentResolve = null;
+
+    var currentOptions = [];
+    var it = -1
+
+    self.doneViewingOptions = function() {
+        if (currentResolve) currentResolve();
+    };
+
+    var nextOption = function(n) {
+        if (currentOptions.length == 0) return null;
+        it = (it + (n || 1) + currentOptions.length) % currentOptions.length;
+        var option = currentOptions[it];
+        log("Option " + (it) + "/" + currentOptions.length + " ");
+        log(option);
+        return option;
+    };
+
+    self.showNextOption = function(n) {
+        var option = nextOption(n || 1);
+        game.piece.warpTo(game.startPosition);
+        while(!game.piece.isRotatedLike(option)) {
+            game.piece.rotate(false, 1, true);
+        }
+        game.piece.warpTo(option.position());
+
+    };
+
+    var findOptions = function() {
+        game = sourceGame.copy();
+        game.state = "Player's Turn";
+        self.events.emit("gameStateRefresh", game);
+        var found = 0;
+        currentOptions = [];
+        it = 0;
+        for (var row = 0; row < game.rows; row++) {
+            for (var col = 0; col < game.cols; col++) {
+                var pos = new Position(row, col);
+                if (game.piece.warpTo(pos) && game.piece.isSettled()) {
+                    currentOptions.push(game.piece.copy());
+                    if (!game.piece.isDouble()) {
+                        game.piece.warpTo(game.startPosition);
+                        game.piece.rotate(false, 2, true);
+                        game.piece.warpTo(pos);
+                        currentOptions.push(game.piece.copy());
+                    }
+                }
+                game.piece.warpTo(game.startPosition);
+                game.piece.rotate(false, 1, true);
+                if (game.piece.warpTo(pos) && game.piece.isSettled()) {
+                    currentOptions.push(game.piece.copy());
+                    if (!game.piece.isDouble()) {
+                        game.piece.warpTo(game.startPosition);
+                        game.piece.rotate(false, 2, true);
+                        game.piece.warpTo(pos);
+                        currentOptions.push(game.piece.copy());
+                    }
+                }
+            }
+        }
+        console.log("found " + currentOptions.length  + " combinations");
+        // setTimeout(function() {
+        //     console.log("resolving");
+        //     resolve();
+        // }, 3000);
+    };
 
     // var game = null;
     // var game = null;
@@ -14,20 +80,9 @@ var CpuPlayer = function(sourceGame) {
         };
 
         var playerTurn = function() {
-            game = sourceGame.copy();
-            game.state = "Player's Turn";
-            self.events.emit("gameStateRefresh", game);
+            findOptions();
             return new Promise(function(resolve, reject) {
-                game.playerControls.warp(new Position(3, 3));
-                // for (var row = 0; row < game.rows; row++) {
-                //     for (var col = 0; col < game.cols; col++) {
-                //         game.playerControls.warp(new Position(row, col));
-                //     }
-                // }
-                setTimeout(function() {
-                    console.log("resolving");
-                    resolve();
-                }, 3000);
+                currentResolve = resolve;
             });
         };
 
@@ -43,8 +98,13 @@ var CpuPlayer = function(sourceGame) {
 
         // };
 
-        // var gameOver = function() {
-        // };
+        var onWin = function() {
+            console.log("CPU PLAYER: YAY!! IM SMART!!");
+        };
+
+        var gameOver = function() {
+            console.log("CPU PLAYER: Damnit I lost!!");
+        };
 
         return new Component("CPU Player",
             {
@@ -53,7 +113,8 @@ var CpuPlayer = function(sourceGame) {
                 // cellDestroyed: cellDestroyed,
                 // nowOnDeck: nowOnDeck,
                 playerTurn: playerTurn,
-                // gameOver: gameOver,
+                gameOver: gameOver,
+                win: onWin,
             }
         );
     }());

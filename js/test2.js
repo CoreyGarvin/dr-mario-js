@@ -63,9 +63,11 @@
             if (animated) {
                 sprite.position.x += (worldPosition.x * METER + offsetX - sprite.position.x) / 2;
                 sprite.position.y += (worldPosition.y * METER + offsetY - sprite.position.y) / 2;
+                sprite.rotation += (cell.type.rotation - sprite.rotation) / 1.5;
             } else {
                 sprite.position.x = worldPosition.x * METER + offsetX;
                 sprite.position.y = worldPosition.y * METER + offsetY;
+                sprite.rotation = cell.type.rotation;
             }
             // sprite.position.set(
             //     worldPosition.x * METER,
@@ -77,7 +79,7 @@
                 // var before = sprite.rotation;
                 // sprite.rotation = sprite.rotation - (2 * Math.PI * (Math.round(sprite.rotation / (2 * Math.PI))));
                 // console.log(before + ", " + sprite.rotation);
-                sprite.rotation += (cell.type.rotation - sprite.rotation) / 1.5;
+                
             // }
             // sprite.rotation = cell.type.rotation;
 
@@ -257,9 +259,10 @@
         const bodyDef = new Box2D.Dynamics.b2BodyDef();
         bodyDef.type = Box2D.Dynamics.b2Body.b2_staticBody;
 
-        var game = new DrMarioGame();
+        var game = new DrMarioGame({name: "Main"});
+        var cpuPlayer = null;
         if (true) {
-            var cpuPlayer = new CpuPlayer(game);
+            cpuPlayer = new CpuPlayer(game);
             cpuPlayer.events.register(function() {
                 var simActors = [];
                 var gameStateRefresh = function(g) {
@@ -459,6 +462,15 @@
                     break;
                 case 90:
                     game.playerControls.rotate(true);
+                    break;
+                case 81:
+                    cpuPlayer.showNextOption(-1);
+                    break;
+                case 87:
+                    cpuPlayer.showNextOption();
+                    break;
+                case 69:
+                    cpuPlayer.doneViewingOptions();
                     break;
                 default:
                     console.log(e.keyCode);
