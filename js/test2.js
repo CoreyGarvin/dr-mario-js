@@ -284,8 +284,8 @@
                 };
 
                 return new Component("SimGraphics", {
-                    gameStateRefresh: gameStateRefresh,
-                    cellCreated: cellCreated
+                    // gameStateRefresh: gameStateRefresh,
+                    // cellCreated: cellCreated
                 });
             }());
         }
@@ -298,7 +298,7 @@
                             cellCreated(cell);
                         }, Math.floor(Math.random() * 3000));
                     });
-                    setTimeout(function() {resolve();}, 3500);
+                    setTimeout(function() {resolve();}, 7500);
                 });
             };
 

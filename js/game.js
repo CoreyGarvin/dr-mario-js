@@ -10,29 +10,31 @@ var DrMarioGame = function(config) {
     this.name = config.name || "Game " + ++cellsCreated;
     game.map = null;
     game.startPosition = new Position(1, 3);
-    game.piece = config.piece || null;
+    
     var pieceQ = config.pieceQ || [];
-    game.state = 0;
+    game.state = config.state || 0;
     var turnTimer = null;
-    var gravityStep = config.gravityStep || 620;
+    var gravityStep = config.gravityStep || 100;
     game.rows = config.rows || 17;
     game.cols = config.cols || 8;
-    var nBugs = config.nBugs || 1;
+    var nBugs = config.nBugs || 60;
+    var turnCount = 0;
 
     game.copy = function() {
         var cells = game.map.cells.map(function(cell) {return cell.copy();});
-        var cpyPiece = game.piece == null ? null : new PlayerPiece(cells.filter(function(cell) {
+        var pieceParts = game.piece == null ? null : cells.filter(function(cell) {
             return cell.position.equals(game.piece.parts[0].position) ||
                    cell.position.equals(game.piece.parts[1].position);
-        }));
+        });
         return new DrMarioGame({
             name: this.name + " Copy " + ++cellsCreated,
+            state: game.state,
             cells: cells,
             rows: game.rows,
             cols: game.cols,
             nBugs: nBugs,
-            piece: cpyPiece,
-            // pieceQ: pieceQ.map(function(piece) {return piece.copy();})
+            pieceParts: pieceParts,
+            pieceQParts: pieceQ[0].parts.map(function(part) {return part.copy();}),
         });
     };
 
@@ -162,6 +164,10 @@ var DrMarioGame = function(config) {
             });
         };
 
+        map.entranceBlocked = function() {
+            return map.at(1, 3) || map.at(1, 4);
+        };
+
         var randomBlankPosition = function(rowMin, rowMax, colMin, colMax) {
             var pos;
             do
@@ -189,7 +195,7 @@ var DrMarioGame = function(config) {
             };
         };
 
-        var findStreaks = function() {
+        map.findStreaks = function() {
             var streaks = [];
 
             // Function names for each direction of each axis
@@ -218,7 +224,7 @@ var DrMarioGame = function(config) {
 
         // Returns [] of killable cells (cells that are part of an n-in-a-row streak)
         map.killables = function(n) {
-            return findStreaks().filter(function(streak) {
+            return map.findStreaks().filter(function(streak) {
                 return streak.cells().length >= n;
             }).reduce(function(prev, curr) {
                 return prev.concat(curr.cells());
@@ -256,6 +262,15 @@ var DrMarioGame = function(config) {
                 motion = cell.moveDown(1, false, false, []) || motion;
             };
             return motion;
+        };
+
+        map.settleAndKill = function() {
+            var kCells = game.map.killables(4);
+            while(kCells.length > 0) {
+                kCells.forEach(function(cell) {cell.destroy();});
+                while(game.map.settle()) {}
+                kCells = game.map.killables(4);
+            }
         };
 
         var init = function() {
@@ -301,13 +316,14 @@ var DrMarioGame = function(config) {
     var gameOver = function() {
         game.state = STATE.GAME_OVER;
         game.events.emit("gameOver");
-        console.log("game over");
+        console.log("game over after " + turnCount + " turns");
     };
 
     var playerTurn = function() {
         if (game.map.at(1, 3) || game.map.at(1, 4)) {
             gameOver();
         } else {
+            turnCount++;
             game.piece = pieceQ.shift();
             // piece.position = new Position(1, 3);
             game.piece.addToMap();
@@ -367,21 +383,9 @@ var DrMarioGame = function(config) {
 
     var win = function() {
         game.state = STATE.GAME_WON;
+        console.log("WIN after " + turnCount + " turns");
         game.events.emit("win");
     };
-
-    var simulationHelpers = function() {
-        // settling of the board and destroy happen all in one shot
-        var physicsSimulation = function() {
-            var kCells = game.map.killables(4);
-            while(kCells.length > 0) {
-                kCells.forEach(function(cell) {cell.destroy();});
-                while(game.map.settle()) {}
-                kCells = game.map.killables(4);
-            }
-        };
-    };
-
 
     var PlayerPiece = function(parts) {
         var self = this;
@@ -477,6 +481,12 @@ var DrMarioGame = function(config) {
             return false;
         };
 
+        this.equals = function(piece) {
+            return (this.parts[0].color === piece.parts[0].color || this.parts[0].color === piece.parts[1].color)
+                && (this.parts[1].color === piece.parts[0].color || this.parts[1].color === piece.parts[1].color)
+                && this.parts.length == piece.parts.length;
+        };
+
         this.rotate = function(cc, n, force) {
             n = n || 1;
             force = force === true;
@@ -517,6 +527,14 @@ var DrMarioGame = function(config) {
         };
         init();
     };
+    
+    game.nextPiece = function() {
+        return pieceQ[0];
+    };
+
+    game.piece = config.pieceParts == null ? null : new PlayerPiece(config.pieceParts);
+    pieceQ = config.pieceQParts == null ? [] : [new PlayerPiece(config.pieceQParts )];
+
     var ifPlayerTurn = function(func) {return function() {return game.state == STATE.PLAYER_CONTROL && func.apply(this, arguments);}};
     this.playerControls = {
         left:  ifPlayerTurn(function() {return game.piece.move("moveLeft");}),
