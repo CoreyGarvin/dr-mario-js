@@ -10,22 +10,30 @@ var DrMarioGame = function(config) {
     this.name = config.name || "Game " + ++cellsCreated;
     game.map = null;
     game.startPosition = new Position(1, 3);
-    
+
     var pieceQ = config.pieceQ || [];
     game.state = config.state || 0;
     var turnTimer = null;
     var gravityStep = config.gravityStep || 100;
     game.rows = config.rows || 17;
     game.cols = config.cols || 8;
-    var nBugs = config.nBugs || 60;
+    var nBugs = config.nBugs || 104;
     var turnCount = 0;
 
     game.copy = function() {
-        var cells = game.map.cells.map(function(cell) {return cell.copy();});
-        var pieceParts = game.piece == null ? null : cells.filter(function(cell) {
-            return cell.position.equals(game.piece.parts[0].position) ||
-                   cell.position.equals(game.piece.parts[1].position);
+        var pieceParts = [];
+        var cells = game.map.cells.map(function(cell) {
+            var copy = cell.copy();
+            if (cell === game.piece.parts[0] || cell === game.piece.parts[1]) {
+                pieceParts.push(copy);
+            }
+            return copy;
         });
+        if (pieceParts.length != 2) {
+            alert("bad piece on game copy");
+            pieceParts = null;
+        }
+
         return new DrMarioGame({
             name: this.name + " Copy " + ++cellsCreated,
             state: game.state,
@@ -92,7 +100,11 @@ var DrMarioGame = function(config) {
             });
             if (result.length == 1) return result[0];
             if (result.length == 0) return null;
-            if (result.length > 1) alert("result > 1");
+            if (result.length > 1) {
+                console.log(result);
+                return result;
+                // alert("result > 1");
+            }
             // return m[pos.row * cols + pos.col];
         };
 
@@ -108,7 +120,7 @@ var DrMarioGame = function(config) {
                     force = force || false;
 
                     // Check bounds
-                    if (!map.inBounds(position)) {
+                    if (!force && !map.inBounds(position) && map.inBounds(this.position)) {
                         return false;
                     }
                     if (force && test) {
@@ -134,10 +146,16 @@ var DrMarioGame = function(config) {
                     // cells.filter(function(cell) {
                     //     return this !== cell;
                     // });
-                    if (this.type === TYPE.LEFT) map.at(this.position.toRight()).type = TYPE.ORPHAN;
-                    if (this.type === TYPE.RIGHT) map.at(this.position.toLeft()).type = TYPE.ORPHAN;
-                    if (this.type === TYPE.TOP) map.at(this.position.below()).type = TYPE.ORPHAN;
-                    if (this.type === TYPE.BOTTOM) map.at(this.position.above()).type = TYPE.ORPHAN;
+                    var otherPiece = null;
+                    if (this.type === TYPE.LEFT) otherPiece = map.at(this.position.toRight());
+                    if (this.type === TYPE.RIGHT) otherPiece = map.at(this.position.toLeft());
+                    if (this.type === TYPE.TOP) otherPiece = map.at(this.position.below());
+                    if (this.type === TYPE.BOTTOM) otherPiece = map.at(this.position.above());
+                    if (otherPiece) {
+                        otherPiece.type = TYPE.ORPHAN;
+                    } else {
+                        console.log("how could this be?");
+                    }
                     return game.events.emit("cellDestroyed", this);
                 };
 
@@ -398,6 +416,23 @@ var DrMarioGame = function(config) {
             sort();
         };
 
+        this.toString = function() {
+            // H or V
+            var s = (isHorz() ? "H" : "V") + " ";
+
+            // Color abbreviation
+            s += "(" + this.parts.map(function(part) {
+                return part.color.name.substring(0,3);
+            }).join("-") + ")";
+
+            // Position of parts
+            s += " Pos: [" + this.parts.map(function(part) {
+                return part.position && part.position.toString();
+            }).join(",") + "]";
+
+            return s;
+        };
+
         this.isSettled = function() {
             var below = game.map.at(self.parts[0].position.below());
             var belowBlocked = below === undefined || below != null;
@@ -423,7 +458,9 @@ var DrMarioGame = function(config) {
         };
 
         var sort = function() {
-
+            if (self.parts.length != 2) {
+                console.log("piece corrupt");
+            }
             if (self.parts[0].position == null || self.parts[1].position == null) {
                 return;
             }
@@ -448,7 +485,8 @@ var DrMarioGame = function(config) {
 
         var isHorz = function() {
             // return self.parts[0].type === TYPE.LEFT;
-            return self.parts[0].position.row === self.parts[1].position.row;
+            return self.parts[0].position != null && self.parts[0].position != null &&
+                   self.parts[0].position.row === self.parts[1].position.row;
         };
 
         var isVert = function() {
@@ -471,11 +509,12 @@ var DrMarioGame = function(config) {
             return false;
         };
 
-        this.warpTo = function(position) {
+        this.warpTo = function(position, test, force) {
             var otherPos = isHorz() ? position.toRight() : position.above();
-            if (this.parts[0].moveTo(position, true) && this.parts[1].moveTo(otherPos, true)) {
-                this.parts[0].moveTo(position);
-                this.parts[1].moveTo(otherPos)
+            if (force || (this.parts[0].moveTo(position, true) && this.parts[1].moveTo(otherPos, true))) {
+                if (test) return true;
+                this.parts[0].moveTo(position, false, force);
+                this.parts[1].moveTo(otherPos, false, force);
                 return true;
             }
             return false;

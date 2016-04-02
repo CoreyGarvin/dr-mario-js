@@ -7,7 +7,7 @@ var CpuPlayer = function(sourceGame) {
     var currentResolve = null;
 
     var currentOptions = [];
-    var it = -1
+    var it = -1;
 
     self.doneViewingOptions = function() {
         if (currentResolve) currentResolve();
@@ -28,14 +28,26 @@ var CpuPlayer = function(sourceGame) {
 
     var movePieceToMimic = function(piece) {
         if (!game.piece.equals(piece)) {
-            alert("Option piece != gamePiece");
+            console.log("Game piece: " + game.piece.toString());
+            console.log("Optn piece: " + piece.toString());
+            // alert("Option piece != gamePiece");
         }
-        game.piece.warpTo(game.startPosition);
-        while(!game.piece.isRotatedLike(piece)) {
-            game.piece.rotate(false, 1, true);
+        var temp = new Position(-10, -10);
+        var success = game.piece.warpTo(temp, false, true);
+        if (!success) {
+            alert("couldnt warp to start position");
+        } else {
+            var n = 4;
+            while(!game.piece.isRotatedLike(piece) && n--) {
+                if (!game.piece.rotate(false, 1)) {
+                    console.log(game.piece.toString());
+                    alert("couldnt rotate game piece");
+                }
+            }
+            game.piece.warpTo(piece.position());
         }
-        game.piece.warpTo(piece.position());
     };
+
 
     var copySourceGame = function() {
         game = sourceGame.copy();
@@ -45,25 +57,44 @@ var CpuPlayer = function(sourceGame) {
     var findOptions = function(game) {
         it = 0;
         var options = [];
-        for (var row = 0; row < game.rows; row++) {
+        var temp = new Position(-10, -10);
+        var game = game.copy();
+        for (var row = 1; row < game.rows; row++) {
             for (var col = 0; col < game.cols; col++) {
                 var pos = new Position(row, col);
                 if (game.piece.warpTo(pos) && game.piece.isSettled()) {
                     options.push(game.piece.copy());
                     if (!game.piece.isDouble()) {
-                        game.piece.warpTo(game.startPosition);
-                        game.piece.rotate(false, 2, true);
-                        game.piece.warpTo(pos);
+                        if (!game.piece.warpTo(temp, false, true)) {
+                            console.log("could not warp to temp");
+                            alert("fail");
+                            return;
+                        }
+                        if (!game.piece.rotate(false, 2)) {
+                            console.error("could not rotate");
+                            return
+                        }
+                        if (!game.piece.warpTo(pos)) {
+                            console.log("could not warp to pos after rotatingn twice");
+                            alert("fail");
+                            return;
+                        }
                         options.push(game.piece.copy());
                     }
                 }
-                game.piece.warpTo(game.startPosition);
-                game.piece.rotate(false, 1, true);
+                if (!game.piece.warpTo(temp, false, true)) {
+                    console.error("could not warp");
+                }
+                if (!game.piece.rotate(false, 1)) {
+                    console.error("could not rotate");
+                }
                 if (game.piece.warpTo(pos) && game.piece.isSettled()) {
                     options.push(game.piece.copy());
                     if (!game.piece.isDouble()) {
-                        game.piece.warpTo(game.startPosition);
-                        game.piece.rotate(false, 2, true);
+                        game.piece.warpTo(temp, false, true);
+                        if (!game.piece.rotate(false, 2)) {
+                            console.error("could not rotate");
+                        }
                         game.piece.warpTo(pos);
                         options.push(game.piece.copy());
                     }
@@ -79,14 +110,20 @@ var CpuPlayer = function(sourceGame) {
     };
 
     var scoreOptions = function(options) {
+        var scoreGame = function(game) {
+            return -1 * game.map.findStreaks().length;
+        };
         var deeper = true;
+        var optionCount = options.length;
+        var t0 = performance.now();
+
         options.forEach(function(option) {
             console.log("started option");
             // Simulate the placement
             movePieceToMimic(option);
             game.map.settleAndKill();
 
-            option.score = -1 * game.map.findStreaks().length;
+            option.score = scoreGame(game);
             if (game.map.entranceBlocked()) {
                 option.score = Number.NEGATIVE_INFINITY;
             }
@@ -95,26 +132,35 @@ var CpuPlayer = function(sourceGame) {
                 game.piece = game.nextPiece();
                 game.piece.addToMap();
                 var beforeNextMove = game.copy();
+
                 option.options = findOptions(game);
-                console.log("found options");
+                optionCount += option.options.length;
+                // console.log("found options");
 
                 option.options.forEach(function(nextOption) {
                     movePieceToMimic(nextOption);
                     game.map.settleAndKill();
-                    console.log("inner settle");
-                    nextOption.score = -1 * game.map.findStreaks().length;
-                    game = beforeNextMove.copy()
+                    // console.log("inner settle");
+                    nextOption.score = scoreGame(game);
+                    game = beforeNextMove.copy();
                 });
-                console.log("finished inner option");
+                // console.log("finished inner option");
 
                 option.options.sort(function(a, b) {
                     return b.score - a.score;});
 
+                // Score the original option as it's highest next-option
                 option.score = option.options[0].score;
-                delete option.options;
+                // delete option.options;
             }
+
+            // Restore game for another option change
             copySourceGame();
         });
+        
+        var t1 = performance.now();
+        // console.log("Call to doSomething took " + (t1 - t0) + " milliseconds.")
+        console.log("Tested " + optionCount + " options in " + (t1 - t0) + "ms (" + optionCount/((t1-t0) / 1000) + "/s");
         // options.sort(function(a, b) {
         //     return b.score - a.score});
     };
@@ -142,7 +188,7 @@ var CpuPlayer = function(sourceGame) {
             console.log(options);
 
             // movePieceToMimic(currentOptions[0]);
-            sourceGame.piece.warpTo(sourceGame.startPosition);
+            // sourceGame.piece.warpTo(sourceGame.startPosition);
             while(!sourceGame.piece.isRotatedLike(options[0])) {
                 sourceGame.piece.rotate(false, 1, true);
             }

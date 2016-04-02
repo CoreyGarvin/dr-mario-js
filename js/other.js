@@ -80,6 +80,9 @@ var Position = function(row, col) {
     this.equals = function(position) {
         return position.row === this.row && position.col === this.col;
     };
+    this.toString = function() {
+        return "(" + this.row + ", " + this.col + ")";
+    };
     this.set(row, col);
 };
 
