@@ -253,7 +253,7 @@ var DrMarioGame = function(config) {
         map.settle = function(items) {
             // By default, use all cells that are not bugs (and have a position)
             items = (items || map.cells).filter(function(cell) {
-                return cell.type !== TYPE.BUG && cell.position;
+                return cell.type !== TYPE.BUG && cell.position && map.inBounds(cell.position);
             });
             // Track if motion happened
             var motion = false;
