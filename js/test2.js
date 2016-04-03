@@ -261,7 +261,7 @@
 
         var game = new DrMarioGame({name: "Main"});
         var cpuPlayer = null;
-        if (true) {
+        if (false) {
             cpuPlayer = new CpuPlayer(game);
             cpuPlayer.events.register(function() {
                 var simActors = [];
@@ -331,11 +331,11 @@
 
             return new Component("Graphics",
                 {
-                    gameInitialized: gameInitialized,
-                    cellCreated: cellCreated,
-                    cellDestroyed: cellDestroyed,
-                    nowOnDeck: nowOnDeck,
-                    gameOver: gameOver,
+                    // gameInitialized: gameInitialized,
+                    // cellCreated: cellCreated,
+                    // cellDestroyed: cellDestroyed,
+                    // nowOnDeck: nowOnDeck,
+                    // gameOver: gameOver,
                 }
             );
         }());
@@ -479,7 +479,7 @@
         // simContainer.addChild(graphics2);
         boardContainer.addChild(graphics);
         container.addChild(boardContainer);
-        container.addChild(simContainer);
+        // container.addChild(simContainer);
 
         renderer.view.addEventListener("mousedown", function(event) {
             isBegin = true;

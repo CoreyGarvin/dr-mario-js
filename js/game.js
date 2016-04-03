@@ -6,18 +6,27 @@ var logError = function(err) {
 var DrMarioGame = function(config) {
     var game = this;
     var config = config || {};
+    config = {
+        name: config.name || "Unnamed Game",
+        rows: config.rows || 17,
+        cols: config.cols || 8,
+        bugs: config.bugs || 104,
+        step: config.step || 600,
+    };
 
-    this.name = config.name || "Game " + ++cellsCreated;
+    // Timer for gravity steps
+    var stepTimer = null;
+
     game.map = null;
     game.startPosition = new Position(1, 3);
 
     var pieceQ = config.pieceQ || [];
     game.state = config.state || 0;
-    var turnTimer = null;
-    var gravityStep = config.gravityStep || 100;
-    game.rows = config.rows || 17;
-    game.cols = config.cols || 8;
-    var nBugs = config.nBugs || 104;
+    
+    // var gravityStep = config.gravityStep || 600;
+    // game.rows = config.rows || 17;
+    // game.cols = config.cols || 8;
+    // var nBugs = config.nBugs || 104;
     var turnCount = 0;
 
     game.copy = function() {
@@ -56,271 +65,6 @@ var DrMarioGame = function(config) {
     // Simple event system
     game.events = new EventSystem("Game");
 
-    // A game piece
-    var Cell = function(position, type, color, disableEmit) {
-        this.position = position || null;
-        this.color = color || bugPalette.random();
-        this.type = type || TYPE.BUG;
-        this.destroyed = false;
-        this.id = cellsCreated++;
-        this.copy = function() {
-            return new Cell(
-                this.position == null ? null : new Position(this.position.row, this.position.col),
-                this.type, this.color, true);
-        };
-        if (!disableEmit) {
-            game.events.emit("cellCreated", this);
-        }
-    };
-
-    // Data structure for game board layout
-    var Map = function(cells) {
-        var map = this;
-        map.cells = [];
-        map.rows = game.rows;
-        map.cols = game.cols;
-
-        map.inBounds = function(pos) {
-            return (pos.row >= 0 && pos.row < map.rows) &&
-                   (pos.col >= 0 && pos.col < map.cols);
-        };
-
-        map.at = function(pos, col) {
-            // Accept numbers
-            if (typeof pos == "number") {
-                pos = new Position(pos, col);
-            }
-
-            if (!map.inBounds(pos)) {
-                return undefined;
-            }
-
-            var result = map.cells.filter(function(item) {
-                return item.position.equals(pos);
-            });
-            if (result.length == 1) return result[0];
-            if (result.length == 0) return null;
-            if (result.length > 1) {
-                console.log(result);
-                return result;
-                // alert("result > 1");
-            }
-            // return m[pos.row * cols + pos.col];
-        };
-
-        map.remove = function(cell) {
-            map.cells.splice(map.cells.indexOf(cell), 1);
-        };
-
-        map.add = function(cells) {
-            var cells = cells.constructor === Array ? cells : [cells];
-            cells.forEach(function(cell) {
-                cell.moveTo = function(position, test, force, ignoreList) {
-                    ignoreList = ignoreList || game.piece.parts;
-                    force = force || false;
-
-                    // Check bounds
-                    if (!force && !map.inBounds(position) && map.inBounds(this.position)) {
-                        return false;
-                    }
-                    if (force && test) {
-                        return true;
-                    }
-                    // Check if space is already occupied
-                    var occupant = map.at(position);
-                    if (!force && occupant && ignoreList.indexOf(occupant) == -1) {
-                        return false;
-                    }
-                    // Move the cell
-                    if (!test) {
-                        this.position = position;
-                    }
-                    return true;
-                };
-                cell.destroy = function() {
-                    // necessary?
-                    this.destroyed = true;
-                    // Remove from map
-                    map.remove(this);
-                    // Remove from cells list
-                    // cells.filter(function(cell) {
-                    //     return this !== cell;
-                    // });
-                    var otherPiece = null;
-                    if (this.type === TYPE.LEFT) otherPiece = map.at(this.position.toRight());
-                    if (this.type === TYPE.RIGHT) otherPiece = map.at(this.position.toLeft());
-                    if (this.type === TYPE.TOP) otherPiece = map.at(this.position.below());
-                    if (this.type === TYPE.BOTTOM) otherPiece = map.at(this.position.above());
-                    if (otherPiece) {
-                        otherPiece.type = TYPE.ORPHAN;
-                    } else {
-                        console.log("how could this be?");
-                    }
-                    return game.events.emit("cellDestroyed", this);
-                };
-
-                cell.moveUp = function(n, test, force, ignoreList) {
-                    return this.moveTo(this.position.above(n), test, force, ignoreList);
-                };
-                cell.moveDown = function(n, test, force, ignoreList) {
-                    return this.moveTo(this.position.below(n), test, force, ignoreList);
-                };
-                cell.moveLeft = function(n, test, force, ignoreList) {
-                    return this.moveTo(this.position.toLeft(n), test, force, ignoreList);
-                };
-                cell.moveRight = function(n, test, force, ignoreList) {
-                    return this.moveTo(this.position.toRight(n), test, force, ignoreList);
-                };
-                map.cells.push(cell);
-            });
-
-        };
-
-        map.bugs = function() {
-            return map.cells.filter(function(cell) {
-                return cell.type === TYPE.BUG;
-            });
-        };
-
-        map.entranceBlocked = function() {
-            return map.at(1, 3) || map.at(1, 4);
-        };
-
-        var randomBlankPosition = function(rowMin, rowMax, colMin, colMax) {
-            var pos;
-            do
-                pos = new Position (
-                    getRandomInt(rowMin || 0, rowMax || map.rows),
-                    getRandomInt(colMin || 0, colMax || map.cols)
-                );
-            while (map.at(pos) != null);
-            return pos;
-        };
-
-        var Streak = function(cells) {
-            var cells = cells.constructor === Array ? cells : [cells];
-            // this.length = cells.length;
-            this.color = cells[0].color;
-            this.cells = function() {
-                return cells;
-            };
-            this.contains = function(cell) {
-                return cells.indexOf(cell) != -1;
-            };
-            // Only allows adding same-color cells
-            this.add = function(cell) {
-                return cell.color === this.color && cells.push(cell);
-            };
-        };
-
-        map.findStreaks = function() {
-            var streaks = [];
-
-            // Function names for each direction of each axis
-            [["above", "below"],["toLeft", "toRight"]]
-            .forEach(function(axis) {
-                var pool = map.cells.slice();
-
-                // Find streaks
-                while (pool.length > 0) {
-                    var streak = new Streak(pool[0]);
-
-                    axis.forEach(function(direction) {
-                        var next = pool[0];
-                        do {
-                            next = map.at(next.position[direction]());
-                        } while(next && streak.add(next));
-                    });
-                    streaks.push(streak);
-                    pool = pool.filter(function(cell) {
-                        return !streak.contains(cell);
-                    });
-                }
-            });
-            return streaks;
-        };
-
-        // Returns [] of killable cells (cells that are part of an n-in-a-row streak)
-        map.killables = function(n) {
-            return map.findStreaks().filter(function(streak) {
-                return streak.cells().length >= n;
-            }).reduce(function(prev, curr) {
-                return prev.concat(curr.cells());
-            }, []).filter(uniqueFilter);
-        };
-
-        // Moves all eligable pieces downward
-        map.settle = function(items) {
-            // By default, use all cells that are not bugs (and have a position)
-            items = (items || map.cells).filter(function(cell) {
-                return cell.type !== TYPE.BUG && cell.position && map.inBounds(cell.position);
-            });
-            // Track if motion happened
-            var motion = false;
-            // Sort by row, so that lowest items are processed first
-            items.sort(function(a, b) {
-                return b.position.row - a.position.row});
-
-            // Move each eligable cell down
-            for (var i = 0; i < items.length; i++) {
-                var cell = items[i];
-                // These conditionals keep pill pieces 'glued' together
-                // If left pill and can move down, ensure the right half can
-                if (cell.type === TYPE.LEFT && cell.moveDown(1, true)) {
-                    var next = map.at(cell.position.toRight());
-                    if (next && next.type === TYPE.RIGHT && !next.moveDown(1, true)) {
-                        continue;
-                    }
-                } else if (cell.type === TYPE.RIGHT && cell.moveDown(1, true)) {
-                    var next = map.at(cell.position.toLeft());
-                    if (next && next.type === TYPE.LEFT && !next.moveDown(1, true)) {
-                        continue;
-                    }
-                }
-                motion = cell.moveDown(1, false, false, []) || motion;
-            };
-            return motion;
-        };
-
-        map.settleAndKill = function() {
-            var kCells = game.map.killables(4);
-            while(kCells.length > 0) {
-                kCells.forEach(function(cell) {cell.destroy();});
-                while(game.map.settle()) {}
-                kCells = game.map.killables(4);
-            }
-        };
-
-        var init = function() {
-            while (map.cells.length < nBugs) {
-                map.add(new Cell(randomBlankPosition(4)));
-                map.killables(3).forEach(function(cell) {
-                    cell.destroy();
-                });
-            }
-        };
-
-        var inita = function() {
-            while (map.cells.length < 104) {
-                map.add(new Cell(randomBlankPosition(4)));
-            }
-            map.cells.filter(function(cell){
-                return [cell.position.row-1,cell.position.row,cell.position.row].indexOf(Math.floor(cell.position.col)) != -1;
-                // return cell.position.col == 2 || cell.position.row == 7 || (cell.position.row >=6 && cell.position.col ==6);
-                // return [2,6].indexOf(cell.position.col) != -1 || cell.position.row == 8;
-            }).forEach(function(cell) {
-                cell.destroy();
-            });
-        };
-
-        // Generate board or use predefined cells
-        if ((cells || []).length == 0) {
-            init();
-        } else {
-            map.add(cells);
-        }
-    };
-
     game.start = function() {
         // generateMap(this.rows, this.cols, nBugs);
         game.events.enabled = true;
@@ -356,8 +100,8 @@ var DrMarioGame = function(config) {
     };
 
     var playerTurnStep = function() {
-        clearTimeout(turnTimer);
-        turnTimer = setTimeout(function() {
+        clearTimeout(stepTimer);
+        stepTimer = setTimeout(function() {
             if (game.piece.move("moveDown")) {
                 playerTurnStep();
             } else {
@@ -368,17 +112,17 @@ var DrMarioGame = function(config) {
 
     var physicsTurn = function() {
         game.state = STATE.PHYSICS_CONTROL;
-        clearTimeout(turnTimer);
+        clearTimeout(stepTimer);
         physicsStep();
     };
 
     var physicsStep = function() {
-        clearTimeout(turnTimer);
+        clearTimeout(stepTimer);
         if (game.map.bugs().length == 0) {
             return win();
         }
 
-        turnTimer = setTimeout(function() {
+        stepTimer = setTimeout(function() {
             // Settle while possible
             if (game.map.settle()) {
                 physicsStep();
@@ -588,5 +332,8 @@ var DrMarioGame = function(config) {
         warp: ifPlayerTurn(function(pos) {return game.piece.warpTo(pos);}),
         rotate: ifPlayerTurn(function(cc) {return game.piece.rotate(cc);})
     };
-    game.map = new Map(config.cells);
+    var map = new Map(config.rows, config.cols, config.bugs);
+    console.log(map.toString());
+
+    map.verticalStreaks(1, [new Position(13, 7), new Position(14, 7), new Position(16, 7)]);
 };

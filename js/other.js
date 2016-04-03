@@ -61,29 +61,25 @@ const TYPE = {
 };
 
 var Position = function(row, col) {
-    this.set = function(row, col) {
-        this.row = row;
-        this.col = col;
-    };
-    this.above = function(n) {
-        return new Position(this.row - (n || 1), this.col);
-    };
-    this.below = function(n) {
-        return this.above(-(n || 1));
-    };
-    this.toLeft = function(n) {
-        return new Position(this.row, this.col - (n || 1));
-    };
-    this.toRight = function(n) {
-        return this.toLeft(-(n || 1));
-    };
-    this.equals = function(position) {
-        return position.row === this.row && position.col === this.col;
-    };
-    this.toString = function() {
-        return "(" + this.row + ", " + this.col + ")";
-    };
-    this.set(row, col);
+    this.row = row;
+    this.col = col;
+};
+
+Position.prototype.offset = function(pos) {
+    return new Position(this.row + pos.row, this.col + pos.col);
+}
+
+Position.prototype.above = function(n) {return this.offset(new Position(-1, 0));};
+Position.prototype.below = function(n) {return this.offset(new Position( 1, 0));};
+Position.prototype.left  = function(n) {return this.offset(new Position( 0,-1));};
+Position.prototype.right = function(n) {return this.offset(new Position( 0, 1));};
+
+Position.prototype.equals = function(position) {
+    return position.row === this.row && position.col === this.col;
+};
+
+Position.prototype.toString = function() {
+    return "(" + this.row + ", " + this.col + ")";
 };
 
 var Component = function(name, handlers) {
@@ -198,3 +194,30 @@ var killablesOld = function(n) {
         return output[key];
     });
 };
+
+// map.findStreaks = function() {
+//     var streaks = [];
+
+//     // Function names for each direction of each axis
+//     [["above", "below"],["toLeft", "toRight"]]
+//     .forEach(function(axis) {
+//         var pool = map.cells.slice();
+
+//         // Find streaks
+//         while (pool.length > 0) {
+//             var streak = new Streak(pool[0]);
+
+//             axis.forEach(function(direction) {
+//                 var next = pool[0];
+//                 do {
+//                     next = map.at(next.position[direction]());
+//                 } while(next && streak.add(next));
+//             });
+//             streaks.push(streak);
+//             pool = pool.filter(function(cell) {
+//                 return !streak.contains(cell);
+//             });
+//         }
+//     });
+//     return streaks;
+// };
