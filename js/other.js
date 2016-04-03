@@ -45,7 +45,7 @@ var ColorPalette = function(colors) {
     };
 };
 
-const bugPalette = new ColorPalette({
+const BUG_COLORS = new ColorPalette({
     RED:    {name: "Red",    value: 0xDD2222},
     YELLOW: {name: "Yellow", value: 0xDDDD22},
     BLUE:   {name: "Blue",   value: 0x2222DD},
@@ -60,27 +60,7 @@ const TYPE = {
     ORPHAN: {name: "Pill Piece",    frame: "bug.png",   rotation: 0},
 };
 
-var Position = function(row, col) {
-    this.row = row;
-    this.col = col;
-};
 
-Position.prototype.offset = function(pos) {
-    return new Position(this.row + pos.row, this.col + pos.col);
-}
-
-Position.prototype.above = function(n) {return this.offset(new Position(-1, 0));};
-Position.prototype.below = function(n) {return this.offset(new Position( 1, 0));};
-Position.prototype.left  = function(n) {return this.offset(new Position( 0,-1));};
-Position.prototype.right = function(n) {return this.offset(new Position( 0, 1));};
-
-Position.prototype.equals = function(position) {
-    return position.row === this.row && position.col === this.col;
-};
-
-Position.prototype.toString = function() {
-    return "(" + this.row + ", " + this.col + ")";
-};
 
 var Component = function(name, handlers) {
     var handlers = handlers;

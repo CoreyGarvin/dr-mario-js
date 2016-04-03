@@ -1,20 +1,35 @@
+const BUGS = [
+    new Cell(TYPE.BUG, BUG_COLORS.RED),
+    new Cell(TYPE.BUG, BUG_COLORS.YELLOW),
+    new Cell(TYPE.BUG, BUG_COLORS.BLUE),
+];
+
 // Data structure for game board layout
 var Map = function(rows, cols, nBugs) {
     // var map = this;
     this.cells = init2d(rows, cols, null);
     this.bugCount = 0;
 
-    while (this.bugCount < nBugs) {
-        this.add(new Cell(), this.randomBlankPosition(4));
-        // map.killables(3).forEach(function(cell) {
-        //     cell.destroy();
-        // });
+    if(true) {
+        while (this.bugCount < nBugs) {
+            this.add(BUGS[getRandomInt(0, BUGS.length)], this.randomBlankPosition(4));
+            // map.killables(3).forEach(function(cell) {
+            //     cell.destroy();
+            // });
+        }
+    } else {
+        this.cells = SAVEDBOARD;
     }
+    // console.log(JSON.stringify(this.cells));
 };
 
 // ------------------------------------------------------------ Layer 0
 // Lowest level access-checker
 Map.prototype.canSet = function(pos) {
+    return this.inBounds(pos);
+};
+
+Map.prototype.canGet = function(pos) {
     return this.inBounds(pos);
 };
 
@@ -29,7 +44,9 @@ Map.prototype.set = function(pos, val) {
 
 // Lowest level getter
 Map.prototype.at = function(pos) {
-    return this.cells[pos.row][pos.col];
+    if (this.canGet(pos)) {
+        return this.cells[pos.row][pos.col];
+    }
 };
 
 // ------------------------------------------------------------ Layer 1
@@ -192,7 +209,7 @@ Map.prototype.horizontalStreaks = function(minLength, positions) {
     // positions are returned.  Intended as an optimization.
     if (positions) {
         // Sort by -col, then -row
-        positions.sort(function(a,b) {return b.row - a.row || b.col - a.col;});
+        positions.sort(function(a, b) {return b.row - a.row || b.col - a.col;});
         // For each position, find streak
         for (var i = 0; i < positions.length; i++) {
             // Skip blanks
@@ -263,53 +280,53 @@ Map.prototype.verticalStreaks = function(minLength, positions) {
         cells = this.cells,
         rows = this.cells.length,
         cols = this.cells[0].length,
+        pos = null,
         cell = null;
 
     // If positions are provided, only streaks involving those
     // positions are returned.  Intended as an optimization.
     if (positions) {
         // Sort by -col, then -row
-        positions.sort(function(a,b) {return b.col - a.col || b.row - a.row;});
+        positions.sort(function(a, b) {return b.col - a.col || b.row - a.row;});
 
         for (var i = 0; i < positions.length; i++) {
-            cell = this.at(positions[i]);
+            pos = positions[i];
+            cell = this.at(pos);
             // Skip blanks
-            if (!cell) continue;
-
-            var row = positions[i].row,
-                col = positions[i].col;
+            if (!cell) {
+                alert("vstreak hint provided empty position " + pos.toString());
+                continue;
+            }
 
             // Go downward, collect consecutive colors
             streak = [];
             do {
                 streak.push(cell);
-                row++;
-                cell = this.atCoord(row, col);
+                pos = pos.below();
+                cell = this.at(pos);
             } while (
-                row < rows &&
                 cell &&
                 cell.color === streak[0].color
             );
 
             // Rewind, then go upwards
-            row = positions[i].row - 1;
-            cell = this.atCoord(row, col);
+            pos = positions[i].above();
+            cell = this.at(pos);
             while (
-                row >= 0 &&
                 cell &&
                 cell.color === streak[0].color
             ) {
                 streak.push(cell);
-                row--;
-                cell = this.atCoord(row, col);
+                pos = pos.above();
+                cell = this.at(pos);
             }
             // Save result
             if (streak.length >= minLength) {streaks.push(streak);}
 
-            // Skip other positions already included in this streak
+            // Fast-forward through other positions already included in this streak
             while (positions[i + 1] &&
-                   positions[i + 1].col == col &&
-                   positions[i + 1].row > row)
+                   positions[i + 1].col == pos.col &&
+                   positions[i + 1].row > pos.row)
             {i++;}
         }
         return streaks;
@@ -318,21 +335,27 @@ Map.prototype.verticalStreaks = function(minLength, positions) {
     // Full map search
     for (var col = 0; col < cols; col++) {
         for (var row = 0; row < rows; row++) {
+            pos = new Position(row, col);
+            cell = this.at(pos);
+
             // Skip blanks
-            if (!cells[row][col]) {
-                continue;
-            }
+            if (!cell) {continue;}
 
             // Accumulate consecutive colors
             streak = [];
             do {
-                streak.push(cells[row++][col]);
-            } while(row < rows && cells[row][col] && cells[row][col].color === streak[0].color);
-            // Rewind 1
-            row--;
+                streak.push(cell);
+                pos = pos.below();
+                cell = this.at(pos);
+            } while(cell && cell.color === streak[0].color);
+
+            // Save our result
             if (streak.length >= minLength) {
                 streaks.push(streak);
             }
+
+            // Fast forward row iterator to match our end  position
+            row = pos.row - 1;
         }
     }
     return streaks;

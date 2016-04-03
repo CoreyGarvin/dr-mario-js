@@ -335,5 +335,9 @@ var DrMarioGame = function(config) {
     var map = new Map(config.rows, config.cols, config.bugs);
     console.log(map.toString());
 
-    map.verticalStreaks(1, [new Position(13, 7), new Position(14, 7), new Position(16, 7)]);
+    // console.log(map.verticalStreaks(1, [new Position(13, 7), new Position(14, 7), new Position(16, 7)]));
+    console.log(map.verticalStreaks());
+
+    console.log(map.horizontalStreaks(1, [new Position(13, 7), new Position(14, 7), new Position(16, 7)]));
+    console.log(map.horizontalStreaks());
 };
