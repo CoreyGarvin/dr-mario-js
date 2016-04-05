@@ -7,10 +7,12 @@ const BUGS = [
 // Data structure for game board layout
 var Map = function(rows, cols, nBugs) {
     // var map = this;
+    this.rows = rows;
+    this.cols = cols;
     this.cells = init2d(rows, cols, null);
     this.bugCount = 0;
 
-    if(true) {
+    if(false) {
         while (this.bugCount < nBugs) {
             this.add(BUGS[getRandomInt(0, BUGS.length)], this.randomBlankPosition(4));
             // map.killables(3).forEach(function(cell) {
@@ -18,7 +20,11 @@ var Map = function(rows, cols, nBugs) {
             // });
         }
     } else {
-        this.cells = SAVEDBOARD;
+        for (var row = 4; row < rows; row++) {
+            for (var col = 0; col < cols; col++) {
+                this.add(BUGS[(col + row) % BUGS.length], Position(row, col));
+            }
+        }
     }
     // console.log(JSON.stringify(this.cells));
 };
@@ -52,14 +58,15 @@ Map.prototype.at = function(pos) {
 // ------------------------------------------------------------ Layer 1
 // Get multiple
 Map.prototype.ats = function(posArr) {
+    var self = this;
     return posArr.map(function(pos) {
-        return this.at(pos);
+        return self.at(pos);
     });
 };
 
 // Convenience getter
 Map.prototype.atCoord = function(row, col) {
-    return this.at(new Position(row, col));
+    return this.at(Position(row, col));
 };
 
 // Add cell to the map
@@ -72,7 +79,7 @@ Map.prototype.add = function(cell, pos, test, replace) {
         var didSet = this.set(pos, cell);
         // Doing a replace on a bug would throw off the bugcount
         // @TODO bug counting logic
-        if (didSet && cell.type === TYPE.BUG) {
+        if (didSet && cell && cell.type === TYPE.BUG) {
             this.bugCount++;
         }
         return didSet;
@@ -107,7 +114,7 @@ Map.prototype.adds = function(cells, posArr, test, replace, skipTest) {
 
     // Add all cells
     for (var i = 0; i < cells.length; i++) {
-        if (!this.add(cells[i], posArr[i], true, replace)) {
+        if (!this.add(cells[i], posArr[i], false, replace)) {
             log(this.toString());
             alert("this should never happen!");
             return false;
@@ -118,8 +125,9 @@ Map.prototype.adds = function(cells, posArr, test, replace, skipTest) {
 
 // Remove multiple
 Map.prototype.removes = function(posArr) {
+    var self =  this;
     return posArr.map(function(pos) {
-        return this.remove(pos);
+        return self.remove(pos);
     });
 };
 
@@ -153,25 +161,36 @@ Map.prototype.moveTogether = function(srcArr, destArr, test, replace) {
         alert();
         return false;
     }
+
+    if (test) {
+        return this.adds(cells, destArr, true, replace);
+    }
     // Remove our cells to avoid problems with intersection
     var cells = this.removes(srcArr);
+    if (!this.adds(cells, destArr)) {
+        if(!this.adds(cells, srcArr)) {
+            alert("something horrible has happened");
+        }
+        return false;
+    }
+    return true;
     // Test each cell's move
-    for (var i = 0; i < srcArr.length; i++) {
+/*    for (var i = 0; i < srcArr.length; i++) {
         if (!this.move(srcArr[i], destArr[i], true, replace)) {
             // A cell failed to move - move cells back to their original pos
             this.adds(cells, srcArr);
             return false;
         }
-    }
+    }*/
     // Test succeeded, perform the move
-    return test === true || this.adds(cells, destArr);
+    // return test === true || this.adds(cells, destArr);
 };
 
-Map.prototype.offsetTogether = function(srcArray, offset, test, replace) {
+Map.prototype.offsetTogether = function(srcArr, offset, test, replace) {
     var destArr = srcArr.map(function(pos) {
         return pos.offset(offset);
     });
-    return this.moveTogether(srcArray, destArr, test, replace);
+    return this.moveTogether(srcArr, destArr, test, replace);
 };
 
 
@@ -189,7 +208,7 @@ Map.prototype.entranceBlocked = function() {
 Map.prototype.randomBlankPosition = function(rowMin, rowMax, colMin, colMax) {
     var pos;
     do
-        pos = new Position (
+        pos = Position(
             getRandomInt(rowMin || 0, rowMax || this.cells.length),
             getRandomInt(colMin || 0, colMax || this.cells[0].length)
         );
@@ -197,77 +216,111 @@ Map.prototype.randomBlankPosition = function(rowMin, rowMax, colMin, colMax) {
     return pos;
 };
 
-Map.prototype.horizontalStreaks = function(minLength, positions) {
+var byRow = function(a, b) {return b.row - a.row || b.col - a.col;};
+var byCol = function(a, b) {return b.col - a.col || b.row - a.row;};
+
+Map.prototype.positionStreaks = function(minLength, positions, horizontal) {
     var streaks = [],
-        streak  = []
+        streak  = [],
         minLength = minLength || 1,
         cells = this.cells,
-        rows = this.cells.length,
-        cols = this.cells[0].length;
+        pos = null,
+        cell = null;
+
+    positions.sort(horizontal ? byRow : byCol);
+    var directions = horizontal ? ["right", "left"] : ["below", "above"];
+    // For each position, find streak
+    for (var i = 0; i < positions.length; i++) {
+        pos = positions[i];
+        cell = this.at(pos);
+        // Skip blanks
+        if (!cell) {
+            alert("positionStreaks hint provided empty position " + pos.toString());
+            continue;
+        }
+
+        // Go right or down, collect consecutive colors
+        streak = [];
+        do {
+            streak.push(cell);
+            pos = pos[directions[0]]();
+            cell = this.at(pos);
+        } while (
+            cell &&
+            cell.color === streak[0].color
+        );
+
+        // Rewind, then go left or up
+        pos = positions[i][directions[1]]();
+        cell = this.at(pos);
+        while (
+            cell &&
+            cell.color === streak[0].color
+        ) {
+            streak.push(cell);
+            pos = pos[directions[1]]();
+            cell = this.at(pos);
+        }
+        // Save result
+        if (streak.length >= minLength) {streaks.push(streak);}
+
+        // Fast-forward through other positions already included in this streak
+        if (horizontal) {
+            while (
+                positions[i + 1] &&
+                positions[i + 1].row == pos.row &&
+                positions[i + 1].col > pos.col
+            ) {i++;}
+        } else {
+            while (
+                positions[i + 1] &&
+                positions[i + 1].col == pos.col &&
+                positions[i + 1].row > pos.row
+            ) {i++;}
+        }
+    }
+    return streaks;
+};
+
+Map.prototype.horizontalStreaks = function(minLength, positions) {
+    var streaks = [],
+        streak  = [],
+        minLength = minLength || 1,
+        rows = this.rows,
+        cols = this.cols,
+        pos = null,
+        cell = null;
 
     // If positions are provided, only streaks involving those
     // positions are returned.  Intended as an optimization.
     if (positions) {
-        // Sort by -col, then -row
-        positions.sort(function(a, b) {return b.row - a.row || b.col - a.col;});
-        // For each position, find streak
-        for (var i = 0; i < positions.length; i++) {
-            // Skip blanks
-            if (!this.at(positions[i])) continue;
-
-            var row = positions[i].row,
-                col = positions[i].col;
-
-            // Go right, collect consecutive colors
-            streak = [];
-            do {
-                streak.push(cells[row][col]);
-                col++;
-            } while (
-                col < cols &&
-                cells[row][col] &&
-                cells[row][col].color === streak[0].color
-            );
-
-            // Rewind, then go left
-            col = positions[i].col - 1;
-            while (
-                col >= 0 && cells[row][col] &&
-                cells[row][col].color === streak[0].color
-            ) {
-                streak.push(cells[row][col]);
-                col--;
-            }
-            // Save result
-            if (streak.length >= minLength) {streaks.push(streak);}
-
-            // Skip other positions already included in this streak
-            while (
-                positions[i + 1] &&
-                positions[i + 1].row == row &&
-                positions[i + 1].col > col
-            ) {i++;}
-        }
-        return streaks;
+        return this.positionStreaks(minLength, positions, true);
     }
 
     // Full map search
     for (var row = 0; row < rows; row++) {
         for (var col = 0; col < cols; col++) {
+            pos = Position(row, col);
+            cell = this.at(pos);
+
             // Skip blanks
-            if (!cells[row][col]) {continue;}
+            if (!cell) {continue;}
 
             // Accumulate consecutive colors
             streak = [];
             do {
-                streak.push(cells[row][col]);
-                col++;
-            } while(row < rows && cells[row][col] && cells[row][col].color === streak[0].color);
-            // Rewind 1
-            col--;
+                streak.push(cell);
+                pos = pos.right();
+                cell = this.at(pos);
+            } while (cell && cell.color === streak[0].color);
+
+            // Save our result
             if (streak.length >= minLength) {
                 streaks.push(streak);
             }
+
+            // Fast forward iterator to streak end position
+            col = pos.col - 1;
         }
     }
     return streaks;
@@ -278,14 +331,15 @@ Map.prototype.verticalStreaks = function(minLength, positions) {
         streak  = [],
         minLength = minLength || 1,
         cells = this.cells,
-        rows = this.cells.length,
-        cols = this.cells[0].length,
+        rows = this.rows,
+        cols = this.cols,
         pos = null,
         cell = null;
 
     // If positions are provided, only streaks involving those
     // positions are returned.  Intended as an optimization.
     if (positions) {
+        return this.positionStreaks(minLength, positions, false);
         // Sort by -col, then -row
         positions.sort(function(a, b) {return b.col - a.col || b.row - a.row;});
 
@@ -335,7 +389,7 @@ Map.prototype.verticalStreaks = function(minLength, positions) {
     // Full map search
     for (var col = 0; col < cols; col++) {
         for (var row = 0; row < rows; row++) {
-            pos = new Position(row, col);
+            pos = Position(row, col);
             cell = this.at(pos);
 
             // Skip blanks
@@ -388,7 +442,7 @@ Map.prototype.killables = function(n) {
             // These conditionals keep pill pieces 'glued' together
             // If left pill and can move down, ensure the right half can
             if (cell.type === TYPE.LEFT && cell.moveDown(1, true)) {
-                var next = map.at(cell.position.toRight());
+                var next = map.at(cell.position.right());
                 if (next && next.type === TYPE.RIGHT && !next.moveDown(1, true)) {
                     continue;
                 }

@@ -33,9 +33,10 @@ function toRadians(deg) {
 }
 
 var ColorPalette = function(colors) {
+    var self = this;
     // Make colors publically available (necessary?)
     Object.keys(colors).forEach(function(key,index) {
-        this[key] = colors[key];
+        self[key] = colors[key];
     });
 
     // Return a random color

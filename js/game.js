@@ -18,7 +18,7 @@ var DrMarioGame = function(config) {
     var stepTimer = null;
 
     game.map = null;
-    game.startPosition = new Position(1, 3);
+    game.startPosition = Position(1, 3);
 
     var pieceQ = config.pieceQ || [];
     game.state = config.state || 0;
@@ -335,7 +335,9 @@ var DrMarioGame = function(config) {
     var map = new Map(config.rows, config.cols, config.bugs);
     console.log(map.toString());
 
-    // console.log(map.verticalStreaks(1, [new Position(13, 7), new Position(14, 7), new Position(16, 7)]));
+    var success = map.offsetTogether([Position(4,4), Position(4,5), Position(5,4)], Position(-2, 0));
+
+    console.log(map.verticalStreaks(1, [new Position(13, 7), new Position(14, 7), new Position(16, 7)]));
     console.log(map.verticalStreaks());
 
     console.log(map.horizontalStreaks(1, [new Position(13, 7), new Position(14, 7), new Position(16, 7)]));
