@@ -5,10 +5,8 @@ var Cell = function(type, color) {
     this.id = ++Cell.count;
 };
 
-Cell.count = 0;
-
 Cell.prototype.copy = function() {
-    return new Cell(this.type, this.color, true);
+    return new Cell(this.type, this.color);
 };
 
 Cell.prototype.toString = function() {
@@ -19,17 +17,13 @@ Cell.prototype.toChar = function() {
     return this.color.name.substring(0, 1);
 };
 
+Cell.count = 0;
 
-// var posCache = [];
-// for (var row = -1; row < 18; row++) {
-//     var r = [];
-//     for (var col = -1; col < 9; col++) {
-//         r.push(new Position(row, col));
-//     }
-//     posCache.push(r);
-// }
-// console.log(posCache);
-
-// var newPosition = function(row, col) {
-//     return posCache[row + 1][col + 1] || newPosition(row, col);
-// };
+Cell.TYPE = {
+    BUG:    {name: "Bug",           opposite: null,             movable: false,  rotation: 0},
+    ORPHAN: {name: "Pill Piece",    opposite: null,             movable: true,   rotation: 0},
+    TOP:    {name: "Pill Top",      opposite: Position( 1, 0),  movable: true,   rotation: toRadians(-90)},
+    BOTTOM: {name: "Pill Bottom",   opposite: Position(-1, 0),  movable: true,   rotation: toRadians(90)},
+    LEFT:   {name: "Pill Left",     opposite: Position( 0, 1),  movable: true,   rotation: toRadians(180)},
+    RIGHT:  {name: "Pill Right",    opposite: Position( 0,-1),  movable: true,   rotation: 0}
+};

@@ -52,14 +52,7 @@ const BUG_COLORS = new ColorPalette({
     BLUE:   {name: "Blue",   value: 0x2222DD},
 });
 
-const TYPE = {
-    BUG:    {name: "Bug",           frame: "bug.png",   rotation: 0},
-    TOP:    {name: "Pill Top",      frame: "pill.png",  rotation: toRadians(-90)},
-    BOTTOM: {name: "Pill Bottom",   frame: "pill.png",  rotation: toRadians(90)},
-    LEFT:   {name: "Pill Left",     frame: "pill.png",  rotation: toRadians(180)},
-    RIGHT:  {name: "Pill Right",    frame: "pill.png",  rotation: 0},
-    ORPHAN: {name: "Pill Piece",    frame: "bug.png",   rotation: 0},
-};
+
 
 
 

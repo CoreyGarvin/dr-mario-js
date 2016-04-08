@@ -1,6 +1,8 @@
 var PositionPool = (function(rows, cols, pad) {
+    var self = this;
     var cacheEnabled = true;
     var cache = [];
+    var positions = [];
 
     // 2D integer coordinates
     var Position = function(row, col) {
@@ -9,27 +11,27 @@ var PositionPool = (function(rows, cols, pad) {
     };
 
     var getCached = function(row, col) {
-        return cache[(row + pad) * (cols + (2 * pad)) + col + pad] || new Position(row, col);
+        return cache[(row + pad) * (cols + (2 * pad)) + col + pad] || getNew(row, col);
     };
 
     var getNew = function(row, col) {
         return new Position(row, col);
     };
 
-    var pos = cacheEnabled ? getCached : getNew;
+    var positionGetter = cacheEnabled ? getCached : getNew;
 
-    var posGetter = function(row, col) {
-        return pos(row, col);
+    var getPosition = function(row, col) {
+        return positionGetter(row, col);
     };
 
     Position.prototype.offset = function(offset) {
-        return pos(this.row + offset.row, this.col + offset.col);
+        return getPosition(this.row + offset.row, this.col + offset.col);
     };
 
-    Position.prototype.above = function(n) {return this.offset(pos(-1, 0));};
-    Position.prototype.below = function(n) {return this.offset(pos( 1, 0));};
-    Position.prototype.left  = function(n) {return this.offset(pos( 0,-1));};
-    Position.prototype.right = function(n) {return this.offset(pos( 0, 1));};
+    Position.prototype.above = function(n) {return this.offset(getPosition(-1, 0));};
+    Position.prototype.below = function(n) {return this.offset(getPosition( 1, 0));};
+    Position.prototype.left  = function(n) {return this.offset(getPosition( 0,-1));};
+    Position.prototype.right = function(n) {return this.offset(getPosition( 0, 1));};
 
     Position.prototype.equals = function(position) {
         return this === position ||
@@ -40,29 +42,26 @@ var PositionPool = (function(rows, cols, pad) {
         return "(" + this.row + ", " + this.col + ")";
     };
 
-    // for (var row = -pad; row < rows + pad; row++) {
-    //     var arr = [];
-    //     for (var col = -pad; col < cols + pad; col++) {
-    //         arr.push(new Position(row, col));
-    //     }
-    //     cache.push(arr);
-    // }
-
+    // Build cache
     for (var row = -pad; row < rows + pad; row++) {
         for (var col = -pad; col < cols + pad; col++) {
-            cache.push(new Position(row, col));
+            var pos = getNew(row, col);
+            cache.push(pos);
+            if (row >= 0 && col >= 0 && row < rows && col < cols) {
+                positions.push(pos);
+            }
         }
     }
 
     return {
-        pos: posGetter,
+        getPosition: getPosition,
+        allPositions: function() {return positions;},
         toggleCaching: function(enabled) {
             cacheEnabled = enabled !== undefined ? enabled : !cacheEnabled;
-            pos = cacheEnabled ? getCached : getNew;
+            positionGetter = cacheEnabled ? getCached : getNew;
             return cacheEnabled;
         }
-
     };
 })(17, 8, 1);
 
-var Position = PositionPool.pos;
+var Position = PositionPool.getPosition;

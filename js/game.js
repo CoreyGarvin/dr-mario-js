@@ -7,7 +7,7 @@ var DrMarioGame = function(config) {
     var game = this;
     var config = config || {};
     config = {
-        name: config.name || "Unnamed Game",
+        name: config.name || "Game " + DrMarioGame.instances,
         rows: config.rows || 17,
         cols: config.cols || 8,
         bugs: config.bugs || 104,
@@ -16,7 +16,7 @@ var DrMarioGame = function(config) {
 
     // Timer for gravity steps
     var stepTimer = null;
-
+    // Game board
     game.map = null;
     game.startPosition = Position(1, 3);
 
@@ -44,7 +44,7 @@ var DrMarioGame = function(config) {
         }
 
         return new DrMarioGame({
-            name: this.name + " Copy " + ++cellsCreated,
+            name: this.name + " Copy",
             state: game.state,
             cells: cells,
             rows: game.rows,
@@ -334,6 +334,15 @@ var DrMarioGame = function(config) {
     };
     var map = new Map(config.rows, config.cols, config.bugs);
     console.log(map.toString());
+    console.log(map.verticalStreaks(null, [Position(14, 3)]));
+
+    var a = performance.now();
+    for(var i = 0; i < 100000; i++) {map.killables();}
+    var b = performance.now();
+    console.log('It took ' + (b - a)/1000 + ' s.');
+
+
+    console.log(map.horizontalStreaks());
 
     var success = map.offsetTogether([Position(4,4), Position(4,5), Position(5,4)], Position(-2, 0));
 
@@ -341,5 +350,9 @@ var DrMarioGame = function(config) {
     console.log(map.verticalStreaks());
 
     console.log(map.horizontalStreaks(1, [new Position(13, 7), new Position(14, 7), new Position(16, 7)]));
-    console.log(map.horizontalStreaks());
+
+    var collect = {};
+    console.log(map.horizontalStreaks(1, null, collect));
 };
+
+DrMarioGame.instances = 0;

@@ -14,7 +14,6 @@ var Map = function(rows, cols, nBugs, cells) {
 
     if (!cells) {
         this.cells = init2d(rows, cols, null);
-        this.cells = init1d(this.rows * this.cols, null);
         if(false) {
             while (this.bugCount < nBugs) {
                 this.add(BUGS[getRandomInt(0, BUGS.length)], this.randomBlankPosition(4));
@@ -23,7 +22,6 @@ var Map = function(rows, cols, nBugs, cells) {
                 // });
             }
         } else {
-            // Consistent board
             for (var row = 4; row < rows; row++) {
                 for (var col = 0; col < cols; col++) {
                     this.add(BUGS[(col + row) % BUGS.length], Position(row, col));
@@ -33,11 +31,14 @@ var Map = function(rows, cols, nBugs, cells) {
     } else {
         this.cells = cells;
     }
+
+
 };
 
-Map.prototype.copy = function(map) {
-    return new Map(this.rows, this.cols, null, this.cells.slice());
-};
+// Map.prototype.copy = function(map) {
+
+//     return new Map
+// };
 
 // ------------------------------------------------------------ Layer 0
 Map.prototype.inBounds = function(pos) {
@@ -63,24 +64,10 @@ Map.prototype.set = function(pos, val) {
     return false;
 };
 
-Map.prototype.set = function(pos, val) {
-    if (this.canSet(pos)) {
-        this.cells[(pos.row * this.cols) + pos.col] = val;
-        return true;
-    }
-    return false;
-};
-
 // Lowest level getter
 Map.prototype.at = function(pos) {
     if (this.canGet(pos)) {
         return this.cells[pos.row][pos.col];
-    }
-};
-
-Map.prototype.at = function(pos) {
-    if (this.canGet(pos)) {
-        return this.cells[(pos.row * this.cols) + pos.col];
     }
 };
 
@@ -131,12 +118,6 @@ Map.prototype.remove = function(pos) {
 
 // Add all or none
 Map.prototype.adds = function(cells, posArr, test, replace, skipTest) {
-    // Ensure equal lengths
-    if (cells.length !== posArr.length) {
-        log("Map.adds() failed: cells + dest array length mismatch");
-        alert();
-        return false;
-    }
     // Test all cells
     if (!skipTest) {
         for (var i = 0; i < cells.length; i++) {
@@ -190,31 +171,25 @@ Map.prototype.offset = function(src, offset, test, replace) {
 
 // Moves a set
 Map.prototype.moveTogether = function(srcArr, destArr, test, replace) {
+    // Ensure equal lengths
+    if (srcArr.length !== destArr.length) {
+        log("Map.moveTogether() failed: src + dest array length mismatch");
+        alert();
+        return false;
+    }
+
+    if (test) {
+        return this.adds(cells, destArr, true, replace);
+    }
     // Remove our cells to avoid problems with intersection
     var cells = this.removes(srcArr);
-    var success = this.adds(cells, destArr, test, replace);
-    if (test || !succcess) {
-        // Put the cells back
+    if (!this.adds(cells, destArr)) {
         if(!this.adds(cells, srcArr)) {
             alert("something horrible has happened");
         }
+        return false;
     }
-    return success;
-    // if (test) {
-    //     var success = this.adds(cells, destArr, true, replace);
-    //     // Put the cells back
-    //     if(!this.adds(cells, srcArr)) {
-    //         alert("something horrible has happened");
-    //     }
-    //     return success;
-    // }
-    // if (!this.adds(cells, destArr)) {
-    //     if(!this.adds(cells, srcArr)) {
-    //         alert("something horrible has happened");
-    //     }
-    //     return false;
-    // }
-    // return true;
+    return true;
 };
 
 // Moves conditionally, according to type (ie, bugs cannot move)
@@ -524,21 +499,3 @@ Map.prototype.toString = function() {
         }).join(" ");
     }).join("\n") + "\n" + line;
 };
-
-Map.prototype.toString = function() {
-    var line = "__________________________\n";
-    var s = line;
-    var lastRow = 0;
-    var pos = {};
-    for (var i = 0; i < this.positions.length; i++) {
-        if (this.positions[i].row !== pos.row) {
-            s += "\n" + this.positions[i].row + "\t";
-        }
-        pos = this.positions[i];
-        var cell = this.at(pos);
-        if (cell) s += this.at(pos).toChar() + " ";
-        else s += "  ";
-    }
-    return s + "\n" + line;
-};
-
