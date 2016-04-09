@@ -32,13 +32,13 @@
     cellFixtureDef.shape.SetAsBox(cellSize / 2, cellSize / 2);
 
     const CELL_TEXTURES = {
-        "Bug":          {frame: "images/bug.png", rotation: 0},
-        "Bug":          {frame: "images/bug.png", rotation: 0},
-        "Pill Piece":   {frame: "images/bug.png", rotation: 0},
-        "Pill Top":     {frame: "images/bug.png", rotation: toRadians(-90)},
-        "Pill Bottom":  {frame: "images/bug.png", rotation: toRadians( 90)},
-        "Pill Left":    {frame: "images/bug.png", rotation: toRadians(180)},
-        "Pill Right":   {frame: "images/bug.png", rotation: 0},
+        "Bug":          {frame: "bug.png",  rotation: 0},
+        "Orphan":       {frame: "pill.png", rotation: 0},
+        "Pill Piece":   {frame: "pill.png", rotation: 0},
+        "Pill Top":     {frame: "pill.png", rotation: toRadians(-90)},
+        "Pill Bottom":  {frame: "pill.png", rotation: toRadians( 90)},
+        "Pill Left":    {frame: "pill.png", rotation: toRadians(180)},
+        "Pill Right":   {frame: "pill.png", rotation: 0},
     };
 
 
@@ -310,9 +310,11 @@
                     .forEach(function(cell) {
                         setTimeout(function() {
                             cellCreated(cell);
-                        }, Math.floor(Math.random() * 3000));
+                        }, Math.floor(Math.random() * 1000));
                     });
-                    setTimeout(function() {resolve();}, 7500);
+                    setTimeout(function() {
+                        resolve();
+                    }, 1500);
                 });
             };
 
@@ -348,7 +350,7 @@
                     gameInitialized: gameInitialized,
                     cellCreated: cellCreated,
                     cellDestroyed: cellDestroyed,
-                    nowOnDeck: nowOnDeck,
+                    // nowOnDeck: nowOnDeck,
                     gameOver: gameOver,
                 }
             );
@@ -451,25 +453,26 @@
         document.onkeydown = function(e) {
             switch (e.keyCode) {
                 case 37:
-                    console.log('left');
+                    // console.log('left');
+                    game.playerMove("left");
                     // actors[Math.floor(Math.random()*actors.length)].gameCell.moveTo(0,0, true);
                     // game.settle();
-                    if (!game.playerControls.left()) {
+                    // if (!game.playerControls.left()) {
                         // actors[10].squishLeft(.5);
                         // actors[11].squishLeft(1.5);
-                    }
+                    // }
                     break;
                 case 38:
-                    console.log('up');
+                    // console.log('up');
                     physicsEnabled = !physicsEnabled;
                     break;
                 case 39:
-                    console.log('right');
-                    game.playerControls.right();
+                    // console.log('right');
+                    game.playerMove("right");
                     break;
                 case 40:
-                    console.log('down');
-                    game.playerControls.down();
+                    // console.log('down');
+                    game.playerMove("down");
                     break;
                 case 88:
                     game.playerControls.rotate();
@@ -493,7 +496,7 @@
         // simContainer.addChild(graphics2);
         boardContainer.addChild(graphics);
         container.addChild(boardContainer);
-        // container.addChild(simContainer);
+        container.addChild(simContainer);
 
         renderer.view.addEventListener("mousedown", function(event) {
             isBegin = true;

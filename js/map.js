@@ -15,7 +15,7 @@ var Map = function(rows, cols, nBugs, cells) {
     if (!cells) {
         this.cells = init2d(rows, cols, null);
         this.cells = init1d(this.rows * this.cols, null);
-        if(false) {
+        if(true) {
             while (this.bugCount < nBugs) {
                 this.add(BUGS[getRandomInt(0, BUGS.length)].copy(), this.randomBlankPosition(4));
                 // map.killables(3).forEach(function(cell) {
@@ -37,6 +37,15 @@ var Map = function(rows, cols, nBugs, cells) {
 
 Map.prototype.copy = function(map) {
     return new Map(this.rows, this.cols, null, this.cells.slice());
+};
+
+Map.prototype.deepCopy = function(map) {
+    return new Map(this.rows, this.cols, null, this.cells.map(function(cell) {
+        if (!cell) {
+            return null;
+        }
+        return cell.copy();
+    }));
 };
 
 // ------------------------------------------------------------ Layer 0
@@ -85,6 +94,19 @@ Map.prototype.at = function(pos) {
     }
 };
 
+Map.prototype.empty = function(pos) {
+    return this.at(pos) === null;
+};
+
+Map.prototype.empties = function(posArr) {
+    for (var i = posArr.length; i--;) {
+        if (!this.empty(posArr[i])) {
+            return false;
+        }
+    }
+    return true;
+};
+
 // ------------------------------------------------------------ Layer 1
 // Get multiple
 Map.prototype.ats = function(posArr) {
@@ -101,7 +123,11 @@ Map.prototype.atCoord = function(row, col) {
 
 // Add cell to the map
 Map.prototype.add = function(cell, pos, test, replace) {
-    if (replace || !this.at(pos)) {
+    if (!cell) {
+        console.log("trying to add a blank cell to the map");
+        console.log("@ " + pos.toString());
+    }
+    if (replace || this.empty(pos)) {
         return (test && this.canSet(pos)) || this.set(pos, cell);
     }
     log("map.add() failed: " + pos.toString() + " " + cell.toString());
@@ -156,17 +182,24 @@ Map.prototype.removes = function(posArr) {
 
 // Moves (by removing and adding) a cell to an absolute position
 Map.prototype.move = function(src, dest, test, replace) {
+    // Just a test, can delete later
     if (src.equals(dest)) {
         log("Map.move() alert: src == dest");
         alert();
         return true;
     }
+    // Another test
     if (!this.at(src)) {
         log("Map.move() failed: src pos " + src.toString() + " is blank");
         alert();
         return false;
     }
-    return test || this.add(this.remove(src), dest, replace);
+    // Attempt to add the cell to the dest
+    if (this.add(this.at(src), dest, test, replace)) {
+        this.remove(src);
+        return true;
+    }
+    return false;
 };
 
 // Moves a cell by a specified amount
@@ -214,8 +247,8 @@ Map.prototype.moveContextually = function(src, dest, test, replace) {
     if (!cell.type.opposite) {
         return this.move(src, dest, test, replace);
     }
-    var srcArr  = [src,   src.offset(Cell.type.opposite)];
-    var destArr = [dest, dest.offset(Cell.type.opposite)];
+    var srcArr  = [src,   src.offset(cell.type.opposite)];
+    var destArr = [dest, dest.offset(cell.type.opposite)];
     return this.moveTogether(srcArr, destArr, true, replace) &&
            (test || this.move(src, dest, test, replace));
 };
@@ -515,5 +548,29 @@ Map.prototype.toString = function() {
         else s += "  ";
     }
     return s + "\n" + line;
+};
+
+Map.prototype.print = function() {
+    // styledConsoleLog('<span style="color:hsl(0, 100%, 90%);background-color:hsl(0, 100%, 50%);"> Red </span> <span style="color:hsl(39, 100%, 85%);background-color:hsl(39, 100%, 50%);"> Orange </span> <span style="color:hsl(60, 100%, 35%);background-color:hsl(60, 100%, 50%);"> Yellow </span> <span style="color:hsl(120, 100%, 60%);background-color:hsl(120, 100%, 25%);"> Green </span> <span style="color:hsl(240, 100%, 90%);background-color:hsl(240, 100%, 50%);"> Blue </span> <span style="color:hsl(300, 100%, 85%);background-color:hsl(300, 100%, 25%);"> Purple </span> <span style="color:hsl(0, 0%, 80%);background-color:hsl(0, 0%, 0%);"> Black </span>');
+
+    // var line = "__________________________\n";
+    var s = "  \t 0 1 2 3 4 5 6 7";
+    var pos = {};
+    for (var i = 0; i < this.positions.length; i++) {
+        if (this.positions[i].row !== pos.row) {
+            s += "\n" + this.positions[i].row + "\t";
+        }
+        pos = this.positions[i];
+        var cell = this.at(pos);
+        if (cell) {
+            var color = cell.color.name == "Yellow" ? "black" : "white";
+            var text = cell.type === Cell.TYPE.BUG ? "  " : cell.type.name.substring(0, 2);
+            s += '<span style="color:' + color + ';background-color: #' + cell.color.value.toString(16) + ';">' + text + '</span>';
+        }
+        else s += '<span style="color:hsl(0, 100%, 90%);background-color: black;">  </span>';
+    }
+    s+="\n  \t 0 1 2 3 4 5 6 7";
+    styledConsoleLog(s);
+    // return s + "\n" + line;
 };
 

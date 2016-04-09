@@ -1,7 +1,7 @@
 var Pill = function(cells) {
     this.cells = cells || [
-        new Cell(null, Cell.TYPE.LEFT),
-        new Cell(null, Cell.TYPE.RIGHT)
+        new Cell(Cell.TYPE.LEFT, BUG_COLORS.BLUE),
+        new Cell(Cell.TYPE.RIGHT)
     ];
     this.sort();
 };
@@ -82,7 +82,7 @@ Pill.prototype.copy = function() {
 
 Pill.prototype.isHorz = function() {
     // return this.cells[0].type === TYPE.LEFT;
-    if (this.positions())
+    // if (this.positions())
     return this.cells[0].position != null && this.cells[0].position != null &&
            this.cells[0].position.row === this.cells[1].position.row;
 };
