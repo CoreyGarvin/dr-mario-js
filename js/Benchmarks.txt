@@ -1,0 +1,11 @@
+Benchmarks
+
+var a = performance.now();
+for(var i = 0; i < 100000; i++) {map.verticalStreaks();}
+var b = performance.now();
+console.log('It took ' + (b - a)/1000 + ' s.');
+
+Using a pre-allocated position pool netted 10-30% better results over instanciating positions.
+
+Using a 1d array(+math) vs a 2d array brought benchmark time down from 18s to 11.5s for killables(), and from 10.7s -> 7.8s for verticalStreaks()
+

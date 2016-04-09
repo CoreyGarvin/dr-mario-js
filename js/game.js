@@ -12,28 +12,24 @@ var DrMarioGame = function(config) {
         cols: config.cols || 8,
         bugs: config.bugs || 104,
         step: config.step || 600,
+        map: config.map || null
     };
 
     // Timer for gravity steps
     var stepTimer = null;
     // Game board
-    game.map = null;
-    game.startPosition = Position(1, 3);
+    game.map = config.map;
+    game.startPositions = [Position(1, 3), Position(1, 4)];
 
-    var pieceQ = config.pieceQ || [];
+    var pillQ = config.pillQ || [];
     game.state = config.state || 0;
-    
-    // var gravityStep = config.gravityStep || 600;
-    // game.rows = config.rows || 17;
-    // game.cols = config.cols || 8;
-    // var nBugs = config.nBugs || 104;
     var turnCount = 0;
 
     game.copy = function() {
         var pieceParts = [];
         var cells = game.map.cells.map(function(cell) {
             var copy = cell.copy();
-            if (cell === game.piece.parts[0] || cell === game.piece.parts[1]) {
+            if (cell === game.piece.cells[0] || cell === game.piece.cells[1]) {
                 pieceParts.push(copy);
             }
             return copy;
@@ -46,12 +42,12 @@ var DrMarioGame = function(config) {
         return new DrMarioGame({
             name: this.name + " Copy",
             state: game.state,
-            cells: cells,
             rows: game.rows,
             cols: game.cols,
             nBugs: nBugs,
             pieceParts: pieceParts,
-            pieceQParts: pieceQ[0].parts.map(function(part) {return part.copy();}),
+            pillQParts: pillQ[0].cells.map(function(part) {return part.copy();}),
+            map: game.map.copy(),
         });
     };
 
@@ -69,7 +65,7 @@ var DrMarioGame = function(config) {
         // generateMap(this.rows, this.cols, nBugs);
         game.events.enabled = true;
         // emitEvents = true;
-        pieceQ = [new PlayerPiece()];
+        pillQ = [new Pill()];
 
         var prom = game.events.emit("gameInitialized", this);
         prom.then(playerTurn, logError);
@@ -86,12 +82,13 @@ var DrMarioGame = function(config) {
             gameOver();
         } else {
             turnCount++;
-            game.piece = pieceQ.shift();
+            game.piece = pillQ.shift();
+            if (!this.map.adds)
             // piece.position = new Position(1, 3);
             game.piece.addToMap();
 
-            pieceQ.push(new PlayerPiece());
-            game.events.emit("nowOnDeck", pieceQ[0].parts);
+            pillQ.push(new Pill());
+            game.events.emit("nowOnDeck", pillQ[0].cells);
 
             game.state = STATE.PLAYER_CONTROL;
             game.events.emit("playerTurn")
@@ -149,174 +146,14 @@ var DrMarioGame = function(config) {
         game.events.emit("win");
     };
 
-    var PlayerPiece = function(parts) {
-        var self = this;
 
-        var init = function() {
-            self.parts = parts || [
-                new Cell(null, TYPE.LEFT),
-                new Cell(null, TYPE.RIGHT)
-            ];
-            sort();
-        };
-
-        this.toString = function() {
-            // H or V
-            var s = (isHorz() ? "H" : "V") + " ";
-
-            // Color abbreviation
-            s += "(" + this.parts.map(function(part) {
-                return part.color.name.substring(0,3);
-            }).join("-") + ")";
-
-            // Position of parts
-            s += " Pos: [" + this.parts.map(function(part) {
-                return part.position && part.position.toString();
-            }).join(",") + "]";
-
-            return s;
-        };
-
-        this.isSettled = function() {
-            var below = game.map.at(self.parts[0].position.below());
-            var belowBlocked = below === undefined || below != null;
-            if (isVert()) {
-                return belowBlocked;
-            } else {
-                return belowBlocked || game.map.at(self.parts[1].position.below()) != null;
-            }
-            // return game.map.at(self.parts[0].position.below()) != null &&
-            //     (isVert() || game.map.at(self.parts[1].position.below()) != null);
-        };
-        this.position = function() {
-            return self.parts[0].position;
-        };
-
-        this.isDouble = function() {
-            return self.parts[0].color === self.parts[1].color;
-        };
-
-        this.isRotatedLike = function(piece) {
-            return self.parts[0].type === piece.parts[0].type &&
-                self.parts[0].color === piece.parts[0].color;
-        };
-
-        var sort = function() {
-            if (self.parts.length != 2) {
-                console.log("piece corrupt");
-            }
-            if (self.parts[0].position == null || self.parts[1].position == null) {
-                return;
-            }
-            // Ensure parts[0] is the most lower-right cells
-            self.parts.sort(function(a,b) {
-                return b.position.row - a.position.row ||
-                a.position.col - b.position.col;
-            });
-            // Set cells types
-            if (isHorz()) {
-                self.parts[0].type = TYPE.LEFT;
-                self.parts[1].type = TYPE.RIGHT;
-            } else {
-                self.parts[0].type = TYPE.BOTTOM;
-                self.parts[1].type = TYPE.TOP;
-            }
-        };
-
-        this.copy = function() {
-            return new PlayerPiece(this.parts.map(function(part) {return part.copy();}));
-        };
-
-        var isHorz = function() {
-            // return self.parts[0].type === TYPE.LEFT;
-            return self.parts[0].position != null && self.parts[0].position != null &&
-                   self.parts[0].position.row === self.parts[1].position.row;
-        };
-
-        var isVert = function() {
-            return !isHorz();
-        };
-
-        this.addToMap = function() {
-            this.parts[0].position = new Position(1, 3);
-            this.parts[1].position = new Position(1, 4);
-            game.map.add(this.parts[0]);
-            game.map.add(this.parts[1]);
-        };
-
-        this.move = function(mover) {
-            if (this.parts[0][mover](1, true) && this.parts[1][mover](1, true)) {
-                this.parts[0][mover]();
-                this.parts[1][mover]();
-                return true;
-            }
-            return false;
-        };
-
-        this.warpTo = function(position, test, force) {
-            var otherPos = isHorz() ? position.toRight() : position.above();
-            if (force || (this.parts[0].moveTo(position, true) && this.parts[1].moveTo(otherPos, true))) {
-                if (test) return true;
-                this.parts[0].moveTo(position, false, force);
-                this.parts[1].moveTo(otherPos, false, force);
-                return true;
-            }
-            return false;
-        };
-
-        this.equals = function(piece) {
-            return (this.parts[0].color === piece.parts[0].color || this.parts[0].color === piece.parts[1].color)
-                && (this.parts[1].color === piece.parts[0].color || this.parts[1].color === piece.parts[1].color)
-                && this.parts.length == piece.parts.length;
-        };
-
-        this.rotate = function(cc, n, force) {
-            n = n || 1;
-            force = force === true;
-            while(n--) {
-                var wasHorz = isHorz();
-                // Horizontal -> Vertical rotation
-                if (wasHorz) {
-                    // Default unobstructed
-                    if (!this.parts[1].moveTo(this.parts[0].position.above(), false, force)) {
-                        // Try above-right
-                        if (this.parts[1].moveUp()) {
-                            this.parts[0].moveRight();
-                        // Try below
-                        } else if (!this.parts[1].moveTo(this.parts[0].position.below())) {
-                            // Try below-right
-                            if (this.parts[1].moveDown()) {
-                                this.parts[0].moveRight();
-                            } else return false;
-                        }
-                    }
-                // Vertical -> Horizontal, try right
-                } else if (!this.parts[1].moveTo(this.parts[0].position.toRight(), false, force)) {
-                    // Try shifting left
-                    if (this.parts[0].moveLeft()) {
-                        this.parts[1].moveDown();
-                    } else return false;
-                }
-                // Achieve counter-clockwise rotation by
-                // swapping positions
-                if ((wasHorz && !cc) || (!wasHorz && cc)) {
-                    var tmp = this.parts[0].position;
-                    this.parts[0].moveTo(this.parts[1].position, false, true);
-                    this.parts[1].moveTo(tmp, false, true);
-                }
-                sort();
-            }
-            return true;
-        };
-        init();
-    };
     
     game.nextPiece = function() {
-        return pieceQ[0];
+        return pillQ[0];
     };
 
-    game.piece = config.pieceParts == null ? null : new PlayerPiece(config.pieceParts);
-    pieceQ = config.pieceQParts == null ? [] : [new PlayerPiece(config.pieceQParts )];
+    game.piece = config.pieceParts == null ? null : new Pill(config.pieceParts);
+    pillQ = config.pillQParts == null ? [] : [new Pill(config.pillQParts )];
 
     var ifPlayerTurn = function(func) {return function() {return game.state == STATE.PLAYER_CONTROL && func.apply(this, arguments);}};
     this.playerControls = {
@@ -332,27 +169,33 @@ var DrMarioGame = function(config) {
         warp: ifPlayerTurn(function(pos) {return game.piece.warpTo(pos);}),
         rotate: ifPlayerTurn(function(cc) {return game.piece.rotate(cc);})
     };
-    var map = new Map(config.rows, config.cols, config.bugs);
-    console.log(map.toString());
-    console.log(map.verticalStreaks(null, [Position(14, 3)]));
-
-    var a = performance.now();
-    for(var i = 0; i < 100000; i++) {map.killables();}
-    var b = performance.now();
-    console.log('It took ' + (b - a)/1000 + ' s.');
+    game.map = new Map(config.rows, config.cols, config.bugs);
 
 
-    console.log(map.horizontalStreaks());
+    console.log(game.map.toString());
 
-    var success = map.offsetTogether([Position(4,4), Position(4,5), Position(5,4)], Position(-2, 0));
+    // Benchmark
+    if (false) {
+        console.log(map.verticalStreaks(null, [Position(14, 3)]));
 
-    console.log(map.verticalStreaks(1, [new Position(13, 7), new Position(14, 7), new Position(16, 7)]));
-    console.log(map.verticalStreaks());
+        var a = performance.now();
+        for(var i = 0; i < 100000; i++) {map.killables();}
+        var b = performance.now();
+        console.log('It took ' + (b - a)/1000 + ' s.');
 
-    console.log(map.horizontalStreaks(1, [new Position(13, 7), new Position(14, 7), new Position(16, 7)]));
 
-    var collect = {};
-    console.log(map.horizontalStreaks(1, null, collect));
+        console.log(map.horizontalStreaks());
+
+        var success = map.offsetTogether([Position(4,4), Position(4,5), Position(5,4)], Position(-2, 0));
+
+        console.log(map.verticalStreaks(1, [new Position(13, 7), new Position(14, 7), new Position(16, 7)]));
+        console.log(map.verticalStreaks());
+
+        console.log(map.horizontalStreaks(1, [new Position(13, 7), new Position(14, 7), new Position(16, 7)]));
+
+        var collect = {};
+        console.log(map.horizontalStreaks(1, null, collect));
+    }
 };
 
 DrMarioGame.instances = 0;

@@ -12,6 +12,7 @@ var html = `
     <script src="js/other.js"></script>
     <script src="js/position.js"></script>
     <script src="js/cell.js"></script>
+    <script src="js/pill.js"></script>
     <script src="js/map.js"></script>
     <script src="js/stats.js"></script>
     <script src="js/box2d.js"></script>

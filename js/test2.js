@@ -31,6 +31,16 @@
     cellFixtureDef.density = 1;
     cellFixtureDef.shape.SetAsBox(cellSize / 2, cellSize / 2);
 
+    const CELL_TEXTURES = {
+        "Bug":          {frame: "images/bug.png", rotation: 0},
+        "Bug":          {frame: "images/bug.png", rotation: 0},
+        "Pill Piece":   {frame: "images/bug.png", rotation: 0},
+        "Pill Top":     {frame: "images/bug.png", rotation: toRadians(-90)},
+        "Pill Bottom":  {frame: "images/bug.png", rotation: toRadians( 90)},
+        "Pill Left":    {frame: "images/bug.png", rotation: toRadians(180)},
+        "Pill Right":   {frame: "images/bug.png", rotation: 0},
+    };
+
 
     var Actor = function(cell, container, world, animated) {
         animated = animated !== false;
@@ -48,6 +58,7 @@
             if (!position) {
                 return;
             }
+            var targetRotation = CELL_TEXTURES[cell.type.name].rotation
 
             var worldPosition = new Box2D.Common.Math.b2Vec2(
                 position.col * cellSize + (cellSize / 2),
@@ -56,18 +67,18 @@
 
             if (physicsBody) {
                 physicsBody.SetPositionAndAngle(
-                    worldPosition, cell.type.rotation);
+                    worldPosition, targetRotation);
             }
 
             // Experimenting with tweening
             if (animated) {
                 sprite.position.x += (worldPosition.x * METER + offsetX - sprite.position.x) / 2;
                 sprite.position.y += (worldPosition.y * METER + offsetY - sprite.position.y) / 2;
-                sprite.rotation += (cell.type.rotation - sprite.rotation) / 1.5;
+                sprite.rotation += (targetRotation - sprite.rotation) / 1.5;
             } else {
                 sprite.position.x = worldPosition.x * METER + offsetX;
                 sprite.position.y = worldPosition.y * METER + offsetY;
-                sprite.rotation = cell.type.rotation;
+                sprite.rotation = targetRotation;
             }
             // sprite.position.set(
             //     worldPosition.x * METER,
@@ -158,7 +169,7 @@
                 return false;
             }
             // Graphics
-            sprite = PIXI.Sprite.fromFrame(cell.type.frame);
+            sprite = PIXI.Sprite.fromFrame(CELL_TEXTURES[cell.type.name].frame);
             sprite.tint = cell.color.value;
             // sprite.filters = [displacementFilter];
             sprite.anchor.x = sprite.anchor.y = 0.5;
@@ -293,7 +304,10 @@
         game.events.register(function() {
             var gameInitialized = function(game) {
                 return new Promise(function(resolve) {
-                    game.map.cells.forEach(function(cell) {
+                    game.map.cells.filter(function(cell) {
+                        return !!cell;
+                    })
+                    .forEach(function(cell) {
                         setTimeout(function() {
                             cellCreated(cell);
                         }, Math.floor(Math.random() * 3000));
@@ -331,11 +345,11 @@
 
             return new Component("Graphics",
                 {
-                    // gameInitialized: gameInitialized,
-                    // cellCreated: cellCreated,
-                    // cellDestroyed: cellDestroyed,
-                    // nowOnDeck: nowOnDeck,
-                    // gameOver: gameOver,
+                    gameInitialized: gameInitialized,
+                    cellCreated: cellCreated,
+                    cellDestroyed: cellDestroyed,
+                    nowOnDeck: nowOnDeck,
+                    gameOver: gameOver,
                 }
             );
         }());
