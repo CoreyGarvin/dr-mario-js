@@ -130,7 +130,7 @@ Map.prototype.add = function(cell, pos, test, replace) {
     if (replace || this.empty(pos)) {
         return (test && this.canSet(pos)) || this.set(pos, cell);
     }
-    log("map.add() failed: " + pos.toString() + " " + cell.toString());
+    // log("map.add() failed: " + pos.toString() + " " + cell.toString());
     return false;
 };
 
@@ -164,8 +164,8 @@ Map.prototype.adds = function(cells, posArr, test, replace, skipTest) {
     // Add all cells
     for (var i = 0; i < cells.length; i++) {
         if (!this.add(cells[i], posArr[i], false, replace)) {
-            log(this.toString());
-            alert("this should never happen!");
+            console.log(this.toString());
+            console.log("^^^this should never happen!");
             return false;
         }
     }
@@ -239,20 +239,35 @@ Map.prototype.moveTogether = function(srcArr, destArr, test, replace) {
 };
 
 // Moves conditionally, according to type (ie, bugs cannot move)
+// Pills will move together
 Map.prototype.moveContextually = function(src, dest, test, replace) {
     var cell = this.at(src);
-    if (!cell || !cell.type.movable) {
-        return false;
-    }
+
+    // Require a movable cell type
+    if (!cell || !cell.type.movable) {return false;}
+
+    // Move the cell if unlinked
     if (!cell.type.opposite) {
         return this.move(src, dest, test, replace);
     }
+    // Determine where the 2 cells should go
     var srcArr  = [src,   src.offset(cell.type.opposite)];
     var destArr = [dest, dest.offset(cell.type.opposite)];
-    return this.moveTogether(srcArr, destArr, true, replace) &&
-           (test || this.move(src, dest, test, replace));
+
+    // Move the 2 cells together
+    return this.moveTogether(srcArr, destArr, test, replace);
 };
 
+// Moves a set of cells (all or none), each by a corresponding offset
+Map.prototype.offsetEach = function(srcArr, offArr, test, replace) {
+    var destArr = [];
+    for (var i = 0; i < srcArr.length; i++) {
+        destArr.push(srcArr[i].offset(offArr[i]));
+    }
+    return this.moveTogether(srcArr, destArr, test, replace);
+};
+
+// Moves a set of cells (all or none), all by a common offset
 Map.prototype.offsetTogether = function(srcArr, offset, test, replace) {
     var destArr = srcArr.map(function(pos) {
         return pos.offset(offset);
@@ -272,7 +287,6 @@ Map.prototype.randomBlankPosition = function(rowMin, rowMax, colMin, colMax) {
     colMax = colMax || this.cols;
 
     do {
-        // pos = this.positions[getRandomInt()];
         pos = Position(
             getRandomInt(rowMin, rowMax),
             getRandomInt(colMin, colMax)
@@ -281,9 +295,12 @@ Map.prototype.randomBlankPosition = function(rowMin, rowMax, colMin, colMax) {
     return pos;
 };
 
-var byRow = function(a, b) {return b.row - a.row || b.col - a.col;};
-var byCol = function(a, b) {return b.col - a.col || b.row - a.row;};
+Map.byRow = function(a, b) {return b.row - a.row || b.col - a.col;};
+Map.byCol = function(a, b) {return b.col - a.col || b.row - a.row;};
 
+// Given a set of positions, returns [ ] of streaks (each an [ ] of Positions).
+// If an {} is passed in as 'collection', it will used to accumulate unique
+// positions in it's values
 Map.prototype.positionStreaks = function(minLength, positions, horizontal, collection) {
     var streaks = [],
         streak  = [],
@@ -293,7 +310,7 @@ Map.prototype.positionStreaks = function(minLength, positions, horizontal, colle
         pos = null,
         cell = null;
 
-    positions.sort(horizontal ? byRow : byCol);
+    positions.sort(horizontal ? Map.byRow : Map.byCol);
     var directions = horizontal ? ["right", "left"] : ["below", "above"];
     // For each position, find streak
     for (var i = 0; i < positions.length; i++) {
@@ -494,6 +511,22 @@ Map.prototype.settle = function(positions, allTheWay) {
 };
 
 
+Map.prototype.destroy = function(posArr) {
+    var map = this;
+    this.ats(posArr).forEach(function(cell) {
+        if (cell.type.opposite) {
+             var op = map.at(cell.position.offset(cell.type.opposite));
+             op.type = Cell.TYPE.ORPHAN;
+        }
+    });
+    return this.removes(posArr);
+};
+
+Map.prototype.settleAndDestroy = function(posArr) {
+    while (this.settle(null, true) && this.destroy(this.killables()).length) {}
+}
+
+
         // By default, use all cells that are not bugs (and have a position)
     //     items = (items || map.cells).filter(function(cell) {
     //         return cell.type !== TYPE.BUG && cell.position && map.inBounds(cell.position);
@@ -565,6 +598,7 @@ Map.prototype.print = function() {
         if (cell) {
             var color = cell.color.name == "Yellow" ? "black" : "white";
             var text = cell.type === Cell.TYPE.BUG ? "  " : cell.type.name.substring(0, 2);
+            text = cell.type.shortName;
             s += '<span style="color:' + color + ';background-color: #' + cell.color.value.toString(16) + ';">' + text + '</span>';
         }
         else s += '<span style="color:hsl(0, 100%, 90%);background-color: black;">  </span>';

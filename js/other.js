@@ -1,5 +1,5 @@
 var debug = false;
-// var debug = true;
+var debug = true;
 var log = function(msg) { if (debug) console.log(msg);}
 
 function uniqueFilter(value, index, self) {

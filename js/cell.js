@@ -26,10 +26,10 @@ Cell.prototype.toChar = function() {
 Cell.count = 0;
 
 Cell.TYPE = {
-    BUG:    {name: "Bug",           opposite: null,             movable: false},
-    ORPHAN: {name: "Orphan",        opposite: null,             movable: true},
-    TOP:    {name: "Pill Top",      opposite: Position( 1, 0),  movable: true},
-    BOTTOM: {name: "Pill Bottom",   opposite: Position(-1, 0),  movable: true},
-    LEFT:   {name: "Pill Left",     opposite: Position( 0, 1),  movable: true},
-    RIGHT:  {name: "Pill Right",    opposite: Position( 0,-1),  movable: true},
+    BUG:    {name: "Bug",        shortName: "  ",           opposite: null,             movable: false},
+    ORPHAN: {name: "Orphan",     shortName: "OO",        opposite: null,             movable: true},
+    TOP:    {name: "Pill Top",   shortName: "/\\",      opposite: Position( 1, 0),  movable: true},
+    BOTTOM: {name: "Pill Bottom",shortName: "\\/",   opposite: Position(-1, 0),  movable: true},
+    LEFT:   {name: "Pill Left",  shortName: "(_",     opposite: Position( 0, 1),  movable: true},
+    RIGHT:  {name: "Pill Right", shortName: "_)",    opposite: Position( 0,-1),  movable: true},
 };

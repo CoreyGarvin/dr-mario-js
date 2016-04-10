@@ -62,12 +62,12 @@ Pill.prototype.sort = function() {
         return;
     }
     // Ensure cells[0] is the most lower-right cells
-    this.cells.sort(function(a,b) {
+    this.cells.sort(function(a, b) {
         return b.position.row - a.position.row ||
                a.position.col - b.position.col;
     });
     // Set cells types
-    if (isHorz()) {
+    if (this.isHorz()) {
         this.cells[0].type = Cell.TYPE.LEFT;
         this.cells[1].type = Cell.TYPE.RIGHT;
     } else {

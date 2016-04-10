@@ -272,7 +272,7 @@
 
         var game = new DrMarioGame({name: "Main"});
         var cpuPlayer = null;
-        if (false) {
+        if (true) {
             cpuPlayer = new CpuPlayer(game);
             cpuPlayer.events.register(function() {
                 var simActors = [];
@@ -320,6 +320,7 @@
 
             var cellCreated = function(cell) {
                 actors.push(new Actor(cell, boardContainer, world));
+                console.log("Actors.length = " + actors.length);
             };
 
             var nowOnDeck = function(cells) {
@@ -347,9 +348,9 @@
 
             return new Component("Graphics",
                 {
-                    gameInitialized: gameInitialized,
-                    cellCreated: cellCreated,
-                    cellDestroyed: cellDestroyed,
+                    // gameInitialized: gameInitialized,
+                    // cellCreated: cellCreated,
+                    // cellDestroyed: cellDestroyed,
                     // nowOnDeck: nowOnDeck,
                     gameOver: gameOver,
                 }
@@ -451,10 +452,11 @@
         game.start();
 
         document.onkeydown = function(e) {
+            // console.log(e.keyCode);
             switch (e.keyCode) {
                 case 37:
                     // console.log('left');
-                    game.playerMove("left");
+                    game.playerInput("move left");
                     // actors[Math.floor(Math.random()*actors.length)].gameCell.moveTo(0,0, true);
                     // game.settle();
                     // if (!game.playerControls.left()) {
@@ -468,17 +470,17 @@
                     break;
                 case 39:
                     // console.log('right');
-                    game.playerMove("right");
+                    game.playerInput("move right");
                     break;
                 case 40:
                     // console.log('down');
-                    game.playerMove("down");
+                    game.playerInput("move down");
                     break;
                 case 88:
-                    game.playerControls.rotate();
+                    game.playerInput("rotate cw");
                     break;
                 case 90:
-                    game.playerControls.rotate(true);
+                    game.playerInput("rotate ccw");
                     break;
                 case 81:
                     cpuPlayer.showNextOption(-1);

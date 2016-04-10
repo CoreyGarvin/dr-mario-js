@@ -9,18 +9,22 @@ var DrMarioGame = function(config) {
         name: config.name || "Game " + ++DrMarioGame.instances,
         rows: config.rows || 17,
         cols: config.cols || 8,
-        bugs: config.bugs || 3,
-        stepTime: config.step || 600,
+        bugs: config.bugs || 10,
+        pillQ: config.pillQ || [],
+        pill: config.pill || null,
+        state: config.state || 0,
+        stepTime: config.step || 1600,
         map: config.map || null
     };
-
+    this.name = config.name;
     // Timer for gravity steps
     this.timer = null;
     this.stepTime = config.stepTime;
+    this.id = ++DrMarioGame.instances;
     // Simple event system
     this.events = new EventSystem("Game (" + config.name + ")");
     this.startPositions = [Position(1, 3), Position(1, 4)];
-    this.pill = null;
+    this.pill = config.pill || null;
     this.pillQ = config.pillQ || [];
     this.state = config.state || 0;
     this.turnCount = 0;
@@ -59,11 +63,19 @@ DrMarioGame.prototype.copy = function() {
         state: this.state,
         rows: this.rows,
         cols: this.cols,
-        nBugs: nBugs,
         pill: newPill,
-        pillQ: pillQ.map(function(pill) {return pill.copy();}),
+        pillQ: this.pillQ.map(function(pill) {return pill.copy();}),
         map: newMap
     });
+};
+
+DrMarioGame.prototype.enterNextPill = function() {
+    this.pill = this.pillQ.shift();
+    if (!this.map.adds(this.pill.cells, this.startPositions)) {
+        console.error("playerTurn: couldnt add pill to map");
+        alert("playerTurn: couldnt add pill to map");
+        return;
+    }
 };
 
 DrMarioGame.prototype.start = function() {
@@ -71,11 +83,7 @@ DrMarioGame.prototype.start = function() {
     var playerTurn = function() {
         if (game.map.empties(game.startPositions)) {
             game.turnCount++;
-            game.pill = game.pillQ.shift();
-            if (!game.map.adds(game.pill.cells, game.startPositions)) {
-                console.error("playerTurn: couldnt add pill to map");
-                return;
-            }
+            game.enterNextPill();
 
             game.pillQ.push(new Pill());
             game.events.emit("nowOnDeck", game.pillQ[0].cells);
@@ -98,6 +106,13 @@ DrMarioGame.prototype.start = function() {
                 physicsTurn();
             }
         }, game.stepTime);
+    };
+
+    this.resetPlayerTimer = function() {
+        if (this.state !== DrMarioGame.STATE.PLAYER_CONTROL) {
+            return false;
+        }
+        playerTurnStep();
     };
 
     var physicsTurn = function() {
@@ -137,13 +152,7 @@ DrMarioGame.prototype.start = function() {
                 return game.events.emit("cellDestroyed", cell);
             })
         ).then(function() {
-            cells.forEach(function(cell) {
-                if (cell.type.opposite) {
-                     var op = game.map.at(cell.position.offset(cell.type.opposite));
-                     op.type = Cell.TYPE.ORPHAN;
-                }
-            });
-            game.map.removes(posArr);
+            game.map.destroy(posArr);
         });
     };
 
@@ -171,23 +180,108 @@ DrMarioGame.offsets = {
     down:   Position( 1, 0),
     left:   Position( 0,-1),
     right:  Position( 0, 1),
+    rotateH: [
+        // A pill rotation behaves depending on its surroundings
+        // If offset fails, try next one
+        [Position( 0, 0), Position(-1,-1)],  // Right becomes above
+        [Position( 0, 1), Position(-1, 0)],  // Above-right
+        [Position( 1, 0), Position( 0,-1)],  // Below
+        [Position( 1, 1), Position( 0, 0)],  // Below-right
+    ],
+    rotateV: [
+        [Position(0, 0), Position( 1, 1)],  // Top falls right
+        [Position(0,-1), Position( 1, 0)],  // Shift left
+    ]
 };
 
+// Test if pill can move down
+DrMarioGame.prototype.isPillSettled = function() {
+    return !this.map.offsetTogether(this.pill.positions(), DrMarioGame.offsets.down, true);
+};
+
+// Attempt move pill to a position, disregarding any pathfinding
+DrMarioGame.prototype.warpPill = function(pos) {
+    return this.map.moveContextually(this.pill.cells[0].position, pos);
+};
+
+// Attempt move pill to a position, disregarding any pathfinding
+DrMarioGame.prototype.warpPillHome = function() {
+    return this.warpPill(this.startPositions[0]);
+};
+
+// Moves the game's current pill
 DrMarioGame.prototype.movePill = function(key) {
     return this.map.offsetTogether( this.pill.positions(), DrMarioGame.offsets[key] );
 };
 
-DrMarioGame.prototype.rotatePill = function() {
-    
+// Swaps positions of the pill halves on the map, without
+// dealing with the constraints of rotation.
+DrMarioGame.prototype.reversePill = function() {
+    this.map.moveTogether(
+        this.pill.positions(),
+        this.pill.positions().reverse()
+    );
+    this.pill.sort();
 };
 
-DrMarioGame.prototype.playerMove = function(key) {
-    var success = this.state === DrMarioGame.STATE.PLAYER_CONTROL && this.movePill(key);
-    if (success) {
-        this.map.print();
+// Rotates the game's current pill, counter-clockwise if ccw == "ccw"
+DrMarioGame.prototype.rotatePill = function(ccw) {
+    ccw = ccw === true || ccw == "ccw";
+    var wasHorz = this.pill.isHorz();
+
+    var offsets = DrMarioGame.offsets[wasHorz ? "rotateH" : "rotateV"];
+    // Attempt the rotation
+    for (var i = 0; i < offsets.length; i++) {
+        if (this.map.offsetEach(this.pill.positions(), offsets[i])) {
+            // Achieve counter-clockwise rotation by swapping positions
+            if ((wasHorz && !ccw) || (!wasHorz && ccw)) {
+                this.reversePill();
+            }
+            this.pill.sort();
+            return true;
+        }
     }
-    return success;
+    return false;
 };
+
+// Accepts a 2 word command such as 'move right' or 'rotate ccw'
+DrMarioGame.prototype.playerInput = function(cmd) {
+    // It's not your turn!
+    if (this.state !== DrMarioGame.STATE.PLAYER_CONTROL) {return false;}
+
+    // Record the cell's row
+    var row = this.pill.cells[0].position.row;
+
+    // Perform the action
+    var parts = cmd.split(" ");
+    if (!this[parts[0] + "Pill"](parts[1])) {return false;}
+
+    // for debug
+    this.map.print();
+
+    // Pill has moved down, reset steptimer
+    if (this.pill.cells[0].position.row > row) {
+        this.resetPlayerTimer();
+    }
+    return true;
+};
+
+// DrMarioGame.prototype.playerMove = function(key) {
+//     var success = this.state === DrMarioGame.STATE.PLAYER_CONTROL && this.movePill(key);
+//     if (success) {
+//         this.map.print();
+//     }
+//     return success;
+// };
+
+// DrMarioGame.prototype.playerRotate = function(key) {
+//     var success = this.state === DrMarioGame.STATE.PLAYER_CONTROL && this.rotatePill(key);
+//     if (success) {
+//         this.map.print();
+//         // console.log("success");
+//     }
+//     return success;
+// };
 
 
 
@@ -243,4 +337,4 @@ DrMarioGame.prototype.playerMove = function(key) {
 //     }
 // };
 
-// DrMarioGame.instances = 0;
+DrMarioGame.instances = 0;

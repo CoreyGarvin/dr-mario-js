@@ -112,3 +112,51 @@
             //     map.add(cells);
             // }
         };
+
+
+        this.rotate = function(cc) {
+            var horz = this.parts[0].position.row === this.parts[1].position.row;
+            // Horizontal -> Vertical rotation
+            if (horz) {
+                // Default unobstructed
+                if (!this.parts[1].moveTo(this.parts[0].position.above())) {
+                    // Try above-right
+                    if (this.parts[1].moveUp()) {
+                        this.parts[0].moveRight();
+                    // Try below
+                    } else if (!this.parts[1].moveTo(this.parts[0].position.below())) {
+                        // Try below-right
+                        if (this.parts[1].moveDown()) {
+                            this.parts[0].moveRight();
+                        } else return false;
+                    }
+                }
+            // Vertical -> Horizontal, try right
+            } else if (!this.parts[1].moveTo(this.parts[0].position.toRight())) {
+                // Try shifting left
+                if (this.parts[0].moveLeft()) {
+                    this.parts[1].moveDown();
+                } else return false;
+            }
+            // Achieve counter-clockwise rotation by
+            // swapping positions
+            if ((horz && !cc) || (!horz && cc)) {
+                var tmp = this.parts[0].position;
+                this.parts[0].moveTo(this.parts[1].position, false, true);
+                this.parts[1].moveTo(tmp, false, true);
+            }
+            // Ensure parts[0] is the most lower-right cells
+            this.parts.sort(function(a,b) {
+                return b.position.row - a.position.row ||
+                a.position.col - b.position.col;
+            });
+            // Set cells types
+            if (horz) {
+                this.parts[0].type = TYPE.BOTTOM;
+                this.parts[1].type = TYPE.TOP;
+            } else {
+                this.parts[0].type = TYPE.LEFT;
+                this.parts[1].type = TYPE.RIGHT;
+            }
+            return true;
+        };

@@ -42,11 +42,12 @@ var PositionPool = (function(rows, cols, pad) {
         return "(" + this.row + ", " + this.col + ")";
     };
 
-    // Build cache
+    // Build cache with padding
     for (var row = -pad; row < rows + pad; row++) {
         for (var col = -pad; col < cols + pad; col++) {
             var pos = getNew(row, col);
             cache.push(pos);
+            // Collect only in-bounds positions
             if (row >= 0 && col >= 0 && row < rows && col < cols) {
                 positions.push(pos);
             }
