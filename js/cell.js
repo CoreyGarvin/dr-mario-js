@@ -15,8 +15,22 @@ Cell.prototype.equals = function(cell) {
            this.type === cell.type;
 };
 
-Cell.prototype.toString = function() {
+Cell.prototype.description = function() {
     return this.color.name + " " + this.type.name;
+};
+
+Cell.prototype.toString = function() {
+    return this.color.char + this.type.char;
+};
+
+Cell.fromString = function(s) {
+    var type = Cell.TYPE_LOOKUP[s[1]];
+    var color = Color.LOOKUP[s[0]];
+
+    if (type && color) {
+        return new Cell(type, color);
+    }
+    return null;
 };
 
 Cell.prototype.toChar = function() {
@@ -26,10 +40,19 @@ Cell.prototype.toChar = function() {
 Cell.count = 0;
 
 Cell.TYPE = {
-    BUG:    {name: "Bug",        shortName: "  ",           opposite: null,             movable: false},
-    ORPHAN: {name: "Orphan",     shortName: "OO",        opposite: null,             movable: true},
-    TOP:    {name: "Pill Top",   shortName: "/\\",      opposite: Position( 1, 0),  movable: true},
-    BOTTOM: {name: "Pill Bottom",shortName: "\\/",   opposite: Position(-1, 0),  movable: true},
-    LEFT:   {name: "Pill Left",  shortName: "(_",     opposite: Position( 0, 1),  movable: true},
-    RIGHT:  {name: "Pill Right", shortName: "_)",    opposite: Position( 0,-1),  movable: true},
+    BUG:    {name: "Bug",           shortName: "  ",    char: "B",      opposite: null,             movable: false},
+    ORPHAN: {name: "Orphan",        shortName: "()",    char: "O",      opposite: null,             movable: true},
+    TOP:    {name: "Pill Top",      shortName: "/\\",   char: "^",      opposite: Position( 1, 0),  movable: true},
+    BOTTOM: {name: "Pill Bottom",   shortName: "\\/",   char: "U",      opposite: Position(-1, 0),  movable: true},
+    LEFT:   {name: "Pill Left",     shortName: "(_",    char: "(",      opposite: Position( 0, 1),  movable: true},
+    RIGHT:  {name: "Pill Right",    shortName: "_)",    char: ")",      opposite: Position( 0,-1),  movable: true},
+};
+
+Cell.TYPE_LOOKUP = {
+    B:   Cell.TYPE.BUG,
+    O:   Cell.TYPE.ORPHAN,
+    "^": Cell.TYPE.TOP,
+    "U": Cell.TYPE.BOTTOM,
+    "(": Cell.TYPE.LEFT,
+    ")": Cell.TYPE.RIGHT,
 };

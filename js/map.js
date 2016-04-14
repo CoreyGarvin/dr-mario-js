@@ -11,11 +11,13 @@ var Map = function(rows, cols, nBugs, cells) {
     this.positions = PositionPool.allPositions();
     this.rows = rows || 17;
     this.cols = cols || 8;
+    this.cells = init1d(this.rows * this.cols, null);
+
 
     if (!cells) {
-        this.cells = init2d(rows, cols, null);
-        this.cells = init1d(this.rows * this.cols, null);
         if(true) {
+            // return Map.fromString("17 8 - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - yB yB - - - - - - - rB rB - - - - - - - - - rB rB - - - rB yB - - rB - rB - - yB - rB yB yB - rB - - - - bB - - rB - - - - - - - - yB - - - rB - rB yB - - - - - - - - - - yB - - - - - - - - rB rB yB bB - bB - - yB rB - yB - - - - - -");
+            // return testMap;
             while (this.bugCount < nBugs) {
                 this.add(BUGS[getRandomInt(0, BUGS.length)].copy(), this.randomBlankPosition(4));
                 // map.killables(3).forEach(function(cell) {
@@ -31,8 +33,48 @@ var Map = function(rows, cols, nBugs, cells) {
             }
         }
     } else {
-        this.cells = cells;
+        if (this.positions.length != cells.length) {
+            alert("cells provided not same length as positions.length");
+            return;
+        }
+        // If cells already have positions
+        if (false) {
+            this.cells = cells;
+        } else {
+            for (var i = 0; i < this.positions.length; i++) {
+                this.add(cells[i], this.positions[i]);
+            }
+        }
     }
+};
+
+Map.prototype.sanityCheck = function(msg) {
+    // Sanity Check
+    var cells = this.cells;
+    var problem = false;
+    for (var i = 0; i < cells.length; i++) {
+        if (cells[i] && !cells[i].position) {
+            problem = true;
+            console.log("no positionn on cell " + Math.floor(i/this.cols) + ", " + i%this.cols);
+        }
+    }
+    if (problem) {
+        console.log(msg + ": sanityCheck FAIL NIGGA!");
+        this.print();
+    }
+    // else {
+    //     console.log(msg + ": sanityCheck OK!");
+    // }
+};
+
+Map.fromString = function(s) {
+    var parts = s.split(" ");
+    var rows = parts.shift();
+    var cols = parts.shift();
+    var cells = parts.map(function(str) {
+        return Cell.fromString(str);
+    });
+    return new Map(rows, cols, null, cells);
 };
 
 Map.prototype.copy = function(map) {
@@ -50,6 +92,9 @@ Map.prototype.deepCopy = function(map) {
 
 // ------------------------------------------------------------ Layer 0
 Map.prototype.inBounds = function(pos) {
+    if (!pos) {
+        console.log("got non-pos");
+    }
     return (pos.row >= 0 && pos.row < this.rows) &&
            (pos.col >= 0 && pos.col < this.cols);
 };
@@ -63,35 +108,41 @@ Map.prototype.canGet = function(pos) {
     return this.inBounds(pos);
 };
 
-// Lowest level settterf
-Map.prototype.set = function(pos, val) {
-    if (this.canSet(pos)) {
-        // Revoke current occupant's position
-        var occupant = this.at(pos);
-        if (occupant) {
-            if (occupant.type === Cell.TYPE.BUG) {
-                this.bugCount--;
-            }
-            occupant.position = null;
-        }
-        // Assign position to new occupuant
-        if (val) {
-            if (val.type === Cell.TYPE.BUG) {
-                this.bugCount++;
-            }
-            val.position = pos;
-        }
-        this.cells[pos.row * this.cols + pos.col] = val;
-        return true;
-    }
-    return false;
-};
-
 // Lowest level getter
 Map.prototype.at = function(pos) {
     if (this.canGet(pos)) {
         return this.cells[(pos.row * this.cols) + pos.col];
     }
+};
+
+// Lowest level settter.  Assigns positions upon entry, revokes them
+// when overwriting.
+Map.prototype.set = function(pos, val, test, replace) {
+    if (!this.canSet(pos)) {
+        return false;
+    }
+    // Revoke current occupant's position
+    var occupant = this.at(pos);
+    if (occupant) {
+        if (!replace) {return false;}
+        if (test)     {return pos;}
+
+        if (occupant.type === Cell.TYPE.BUG) {
+            this.bugCount--;
+        }
+        occupant.position = null;
+    } else if (test) {
+        return pos;
+    }
+    // Assign position to new occupuant
+    if (val) {
+        if (val.type === Cell.TYPE.BUG) {
+            this.bugCount++;
+        }
+        val.position = pos;
+    }
+    this.cells[pos.row * this.cols + pos.col] = val;
+    return pos;
 };
 
 Map.prototype.empty = function(pos) {
@@ -117,27 +168,28 @@ Map.prototype.ats = function(posArr) {
 };
 
 // Convenience getter
-Map.prototype.atCoord = function(row, col) {
+Map.prototype.atC = function(row, col) {
     return this.at(Position(row, col));
 };
 
 // Add cell to the map
 Map.prototype.add = function(cell, pos, test, replace) {
-    if (!cell) {
-        console.log("trying to add a blank cell to the map");
-        console.log("@ " + pos.toString());
-    }
-    if (replace || this.empty(pos)) {
-        return (test && this.canSet(pos)) || this.set(pos, cell);
-    }
+    // if (!cell) {
+        // console.log("trying to add a blank cell to the map");
+        // console.log("@ " + pos.toString());
+        // alert();
+    // }
+
+    return this.set(pos, cell, test, replace);
+
     // log("map.add() failed: " + pos.toString() + " " + cell.toString());
-    return false;
+    // return false;
 };
 
 // Removes and returns cell at pos
 Map.prototype.remove = function(pos) {
     const cell = this.at(pos);
-    this.set(pos, null);
+    this.set(pos, null, false, true);
     return cell;
 };
 
@@ -159,7 +211,7 @@ Map.prototype.adds = function(cells, posArr, test, replace, skipTest) {
             }
         }
     }
-    if (test) return true;
+    if (test) return posArr;
 
     // Add all cells
     for (var i = 0; i < cells.length; i++) {
@@ -169,7 +221,7 @@ Map.prototype.adds = function(cells, posArr, test, replace, skipTest) {
             return false;
         }
     }
-    return true;
+    return posArr;
 };
 
 // Remove multiple
@@ -186,7 +238,7 @@ Map.prototype.move = function(src, dest, test, replace) {
     if (src.equals(dest)) {
         log("Map.move() alert: src == dest");
         alert();
-        return true;
+        return dest;
     }
     // Another test
     if (!this.at(src)) {
@@ -195,11 +247,15 @@ Map.prototype.move = function(src, dest, test, replace) {
         return false;
     }
     // Attempt to add the cell to the dest
-    if (this.add(this.at(src), dest, test, replace)) {
-        this.remove(src);
-        return true;
+    var cell = this.remove(src);
+    var success = this.add(cell, dest, test, replace);
+    if (!success || test) {
+        // Put the cell back
+        if (!this.add(cell, src, test, replace)) {
+            console.log("something horrible has happened");
+        }
     }
-    return false;
+    return success;
 };
 
 // Moves a cell by a specified amount
@@ -213,14 +269,14 @@ Map.prototype.offset = function(src, offset, test, replace) {
 Map.prototype.moveTogether = function(srcArr, destArr, test, replace) {
     // Remove our cells to avoid problems with intersection
     var cells = this.removes(srcArr);
-    var success = this.adds(cells, destArr, test, replace);
-    if (test || !success) {
-        // Put the cells back
+    var result = this.adds(cells, destArr, test, replace);
+    if (test || !result) {
+        // Put the cells back (should always succeed)
         if(!this.adds(cells, srcArr)) {
             alert("something horrible has happened");
         }
     }
-    return success;
+    return result;
     // if (test) {
     //     var success = this.adds(cells, destArr, true, replace);
     //     // Put the cells back
@@ -239,7 +295,7 @@ Map.prototype.moveTogether = function(srcArr, destArr, test, replace) {
 };
 
 // Moves conditionally, according to type (ie, bugs cannot move)
-// Pills will move together
+// Pills will move together.  Returns [] of positions upon success.
 Map.prototype.moveContextually = function(src, dest, test, replace) {
     var cell = this.at(src);
 
@@ -248,8 +304,11 @@ Map.prototype.moveContextually = function(src, dest, test, replace) {
 
     // Move the cell if unlinked
     if (!cell.type.opposite) {
-        return this.move(src, dest, test, replace);
+        var result = this.move(src, dest, test, replace);
+        if (result) {return [result];}
+        return result;
     }
+
     // Determine where the 2 cells should go
     var srcArr  = [src,   src.offset(cell.type.opposite)];
     var destArr = [dest, dest.offset(cell.type.opposite)];
@@ -276,7 +335,7 @@ Map.prototype.offsetTogether = function(srcArr, offset, test, replace) {
 };
 
 Map.prototype.entranceBlocked = function() {
-    return this.at(1, 3) || this.at(1, 4);
+    return this.atC(1, 3) || this.atC(1, 4);
 };
 
 Map.prototype.randomBlankPosition = function(rowMin, rowMax, colMin, colMax) {
@@ -299,14 +358,13 @@ Map.byRow = function(a, b) {return b.row - a.row || b.col - a.col;};
 Map.byCol = function(a, b) {return b.col - a.col || b.row - a.row;};
 
 // Given a set of positions, returns [ ] of streaks (each an [ ] of Positions).
-// If an {} is passed in as 'collection', it will used to accumulate unique
+// If an {} is passed in as 'collector', it will used to accumulate unique
 // positions in it's values
-Map.prototype.positionStreaks = function(minLength, positions, horizontal, collection) {
+Map.prototype.positionStreaks = function(minLength, positions, horizontal, collector) {
     var streaks = [],
         streak  = [],
         color = null,
         minLength = minLength || 1,
-        cells = this.cells,
         pos = null,
         cell = null;
 
@@ -354,9 +412,9 @@ Map.prototype.positionStreaks = function(minLength, positions, horizontal, colle
         // Save result
         if (streak.length >= minLength) {
             streaks.push(streak);
-            if (collection) {
+            if (collector) {
                 for (var s = streak.length; s--;) {
-                    collection[streak[s].row * cols + streak[s].col] = streak[s];
+                    collector[streak[s].row * this.cols + streak[s].col] = streak[s];
                 }
             }
         }
@@ -379,7 +437,13 @@ Map.prototype.positionStreaks = function(minLength, positions, horizontal, colle
     return streaks;
 };
 
-Map.prototype.horizontalStreaks = function(minLength, positions, collection) {
+Map.prototype.horizontalStreaks = function(minLength, positions, collector) {
+    // If positions are provided, only streaks involving those
+    // positions are returned.  Intended as an optimization.
+    if (positions) {
+        return this.positionStreaks(minLength, positions, true, collector);
+    }
+
     var streaks = [],
         streak  = [],
         color = null,
@@ -388,12 +452,6 @@ Map.prototype.horizontalStreaks = function(minLength, positions, collection) {
         cols = this.cols,
         pos = null,
         cell = null;
-
-    // If positions are provided, only streaks involving those
-    // positions are returned.  Intended as an optimization.
-    if (positions) {
-        return this.positionStreaks(minLength, positions, true);
-    }
 
     // Full map search
     for (var row = 0; row < rows; row++) {
@@ -417,9 +475,9 @@ Map.prototype.horizontalStreaks = function(minLength, positions, collection) {
             // Save our result
             if (streak.length >= minLength) {
                 streaks.push(streak);
-                if (collection) {
+                if (collector) {
                     for (var s = streak.length; s--;) {
-                        collection[streak[s].row * cols + streak[s].col] = streak[s];
+                        collector[streak[s].row * cols + streak[s].col] = streak[s];
                     }
                 }
             }
@@ -431,22 +489,21 @@ Map.prototype.horizontalStreaks = function(minLength, positions, collection) {
     return streaks;
 };
 
-Map.prototype.verticalStreaks = function(minLength, positions, collection) {
+Map.prototype.verticalStreaks = function(minLength, positions, collector) {
+    // If positions are provided, only streaks involving those
+    // positions are returned.  Intended as an optimization.
+    if (positions) {
+        return this.positionStreaks(minLength, positions, false, collector);
+    }
+
     var streaks = [],
         streak  = [],
         color = null,
         minLength = minLength || 1,
-        cells = this.cells,
         rows = this.rows,
         cols = this.cols,
         pos = null,
         cell = null;
-
-    // If positions are provided, only streaks involving those
-    // positions are returned.  Intended as an optimization.
-    if (positions) {
-        return this.positionStreaks(minLength, positions, false);
-    }
 
     // Full map search
     for (var col = 0; col < cols; col++) {
@@ -472,9 +529,9 @@ Map.prototype.verticalStreaks = function(minLength, positions, collection) {
             // Save our result
             if (streak.length >= minLength) {
                 streaks.push(streak);
-                if (collection) {
+                if (collector) {
                     for (var s = streak.length; s--;) {
-                       collection[streak[s].row * cols + streak[s].col] = streak[s];
+                       collector[streak[s].row * cols + streak[s].col] = streak[s];
                     }
                 }
             }
@@ -486,7 +543,9 @@ Map.prototype.verticalStreaks = function(minLength, positions, collection) {
 };
 
 // Returns [] of unique positions
-Map.prototype.killables = function(minLength, positions) {
+Map.prototype.killables = function(positions, minLength) {
+    // this.sanityCheck("start killables");
+
     minLength = minLength || 4;
     var collector = {};
     this.verticalStreaks(minLength, positions, collector);
@@ -494,37 +553,149 @@ Map.prototype.killables = function(minLength, positions) {
     return Object.keys(collector).map(function(key) {return collector[key];});
 };
 
-// Moves all eligable cells downward once.  Repeats if allTheWay
-Map.prototype.settle = function(positions, allTheWay) {
-    positions = positions || this.positions;
-    // var offset = Position(0, 1);
-    var didMove = false;
-    do {
-        didMove = false;
-        var i = positions.length;
 
+
+// Moves all eligable cells downward once.  Repeats if allTheWay
+// Returns [] of positions of cells that were moved
+Map.prototype.settle = function(positions, allTheWay) {
+
+    // this.sanityCheck("start settle");
+
+    positions = positions || this.positions;
+    var allMovers = {};
+    do {
+        var settledPositions = {};
+        // For each position
+        var i = positions.length;
         while (i--) {
-            didMove = this.moveContextually(positions[i], positions[i].below()) || didMove;
+            // if (i==120) {
+            //     console.log("this is the guy");
+            // }
+            // Attempt move downward, record ending positions of moved items
+            var movedArr = this.moveContextually(positions[i], positions[i].below());
+            if (movedArr) {
+                for (var j = movedArr.length; j--;) {
+                    // Convenience alias
+                    var newPos  = movedArr[j];
+                    var prevPos = newPos.above();
+                    // Clear the allmovers where the pieces were previously
+                    delete allMovers[prevPos.row * this.cols + prevPos.col];
+                }
+                for (var j = movedArr.length; j--;) {
+                    // Convenience alias
+                    var newPos  = movedArr[j];
+                    var prevPos = newPos.above();
+
+                    // Record moved position for local use
+                    settledPositions[newPos.row * this.cols + newPos.col] = newPos;
+
+                    // Record moved position for final output
+                    allMovers[newPos.row * this.cols + newPos.col] = newPos;
+                }
+            }
         }
-    } while (didMove && allTheWay);
-    return didMove;
+        // Only positions that moved are tested next round
+        positions = Object.keys(settledPositions).map(function(key) {
+            return settledPositions[key];
+        });
+    } while (positions.length && allTheWay);
+    // Return ending positions of anything that moved
+    var endPositions = Object.keys(allMovers).map(function(key) {
+        return allMovers[key];
+    });
+    if (endPositions.length) {
+        return endPositions;
+    }
+    return false;
 };
 
+// Like 'removes', but is contextual toward cell type (AKA, destroying half of
+// a pill will leave the other half as an orphan type)
+// Returns [Position] of cells that could be affected (like orphans or above cells))
+// Map.prototype.destroy = function(posArr) {
+//     var map = this;
+//     var affectedPositions = [];
+
+//     posArr.forEach(function(pos) {
+//         var cell = map.at(pos);
+//         if (cell.type.opposite) {
+//             var opPos = cell.position.offset(cell.type.opposite);
+//             map.at(opPos).type = Cell.TYPE.ORPHAN;
+//             affectedPositions.push(opPos);
+//         }
+//         map.remove(pos);
+//     });
+//     posArr.forEach(function(pos) {
+//         if (map.at(pos.above())) {
+//             affectedPositions.push(pos);
+//         }
+//     });
+//     return affectedPositions;
+// };
+
+
+// This one is trying to return 'affected' positions, so we can feed into
+// the settle function, but you never know how high a stack is
+// Map.prototype.destroy = function(posArr) {
+//     var map = this;
+//     var affectedPositions = [];
+//     posArr.forEach(function(pos) {
+//         var cell = map.at(pos);
+//         if (cell.type.opposite) {
+//             var opPos = cell.position.offset(cell.type.opposite);
+//             map.at(opPos).type = Cell.TYPE.ORPHAN;
+//             affectedPositions.push(opPos);
+//         }
+//         map.remove(pos);
+//     });
+//     affectedPositions = affectedPositions.filter(function(pos) {
+//         return map.at(pos);
+//     });
+//     posArr.forEach(function(pos) {
+//         if (map.at(pos.above())) {
+//             affectedPositions.push(pos);
+//         }
+//     });
+//     return affectedPositions;
+// };
 
 Map.prototype.destroy = function(posArr) {
+    // this.sanityCheck("start destroy");
+
     var map = this;
     this.ats(posArr).forEach(function(cell) {
         if (cell.type.opposite) {
-             var op = map.at(cell.position.offset(cell.type.opposite));
-             op.type = Cell.TYPE.ORPHAN;
+            var opPos = cell.position.offset(cell.type.opposite);
+            map.at(opPos).type = Cell.TYPE.ORPHAN;
         }
+        // Sanity check
+        if (!cell.position) {
+            console.log("nothing at position");
+        }
+        map.remove(cell.position);
     });
-    return this.removes(posArr);
+
+    // this.sanityCheck("end destroy");
 };
 
 Map.prototype.settleAndDestroy = function(posArr) {
-    while (this.settle(null, true) && this.destroy(this.killables()).length) {}
-}
+    // this.sanityCheck("start settle&destroy");
+
+    var killables = this.killables(posArr);
+    while (killables.length) {
+        var affected = this.destroy(killables);
+        // var aboveKills = killables.map(function(pos) {return pos.above();});
+        var settled = this.settle(null, true);
+        if (settled) {
+            killables = this.killables(settled);
+        } else {
+            killables = [];
+        }
+    }
+
+    // this.sanityCheck("end settledestroy");
+    // while (this.settle(null, true) && this.destroy(this.killables()).length) {}
+};
 
 
         // By default, use all cells that are not bugs (and have a position)
@@ -583,11 +754,22 @@ Map.prototype.toString = function() {
     return s + "\n" + line;
 };
 
+Map.prototype.toString = function() {
+    return this.rows + " " + this.cols + " " +
+           this.cells.map(function(cell) {
+                if (cell) {
+                    return cell.toString();
+                }
+                return "-";
+           }).join(" ");
+};
+
 Map.prototype.print = function() {
     // styledConsoleLog('<span style="color:hsl(0, 100%, 90%);background-color:hsl(0, 100%, 50%);"> Red </span> <span style="color:hsl(39, 100%, 85%);background-color:hsl(39, 100%, 50%);"> Orange </span> <span style="color:hsl(60, 100%, 35%);background-color:hsl(60, 100%, 50%);"> Yellow </span> <span style="color:hsl(120, 100%, 60%);background-color:hsl(120, 100%, 25%);"> Green </span> <span style="color:hsl(240, 100%, 90%);background-color:hsl(240, 100%, 50%);"> Blue </span> <span style="color:hsl(300, 100%, 85%);background-color:hsl(300, 100%, 25%);"> Purple </span> <span style="color:hsl(0, 0%, 80%);background-color:hsl(0, 0%, 0%);"> Black </span>');
 
     // var line = "__________________________\n";
-    var s = "  \t 0 1 2 3 4 5 6 7";
+    var s = this.toString();
+    s += "\n  \t 0 1 2 3 4 5 6 7";
     var pos = {};
     for (var i = 0; i < this.positions.length; i++) {
         if (this.positions[i].row !== pos.row) {
@@ -608,3 +790,4 @@ Map.prototype.print = function() {
     // return s + "\n" + line;
 };
 
+var testMap = Map.fromString("17 8 - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - yB - - - yB - - - - - - - - - - - - - rB - - rB - - - rB - - yB - - - yB - - - yB - bB - - yB r^ rB - - - - - - bU yB - - - bO yB - bB rB - - bB bO - r( b) - - - - yB yB - bB - - - - bB - r( b) - - - - - yB - rB bB - - - bB -");

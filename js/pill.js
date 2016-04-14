@@ -1,6 +1,6 @@
 var Pill = function(cells) {
     this.cells = cells || [
-        new Cell(Cell.TYPE.LEFT, BUG_COLORS.BLUE),
+        new Cell(Cell.TYPE.LEFT),
         new Cell(Cell.TYPE.RIGHT)
     ];
     this.sort();
@@ -8,7 +8,7 @@ var Pill = function(cells) {
 
 Pill.prototype.toString = function() {
     // H or V
-    var s = (this.isHorz() ? "H" : "V") +
+    return (this.isHorz() ? "H" : "V") +
             "(" + this.cells[0].toChar() + this.cells[1].toChar() + ")" +
             this.cells[0].position ? " @ " + this.cells[0].position.toString : "";
 
@@ -88,7 +88,23 @@ Pill.prototype.isHorz = function() {
 };
 
 Pill.prototype.isVert = function() {
-    return !isHorz();
+    return !this.isHorz();
+};
+
+Pill.prototype.print = function() {
+    // styledConsoleLog('<span style="color:hsl(0, 100%, 90%);background-color:hsl(0, 100%, 50%);"> Red </span> <span style="color:hsl(39, 100%, 85%);background-color:hsl(39, 100%, 50%);"> Orange </span> <span style="color:hsl(60, 100%, 35%);background-color:hsl(60, 100%, 50%);"> Yellow </span> <span style="color:hsl(120, 100%, 60%);background-color:hsl(120, 100%, 25%);"> Green </span> <span style="color:hsl(240, 100%, 90%);background-color:hsl(240, 100%, 50%);"> Blue </span> <span style="color:hsl(300, 100%, 85%);background-color:hsl(300, 100%, 25%);"> Purple </span> <span style="color:hsl(0, 0%, 80%);background-color:hsl(0, 0%, 0%);"> Black </span>');
+    var s = "";
+    for (var i = 0; i < this.cells.length; i++) {
+        if (i == 1 && this.isVert()) {
+            s += "\n";
+        }
+        var cell = this.cells[i];
+        var color = cell.color.name == "Yellow" ? "black" : "white";
+        var text = text = cell.type.shortName;
+        s += '<span style="color:' + color + ';background-color: #' + cell.color.value.toString(16) + ';">' + text + '</span>';
+    }
+    s += " @ " + this.cells[0].position ? this.cells[0].position.toString() : "null";
+    styledConsoleLog(s);
 };
 
     // this.addToMap = function() {

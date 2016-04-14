@@ -1,5 +1,5 @@
 var debug = false;
-var debug = true;
+// var debug = true;
 var log = function(msg) { if (debug) console.log(msg);}
 
 function uniqueFilter(value, index, self) {
@@ -33,25 +33,7 @@ function toRadians(deg) {
     return deg * Math.PI / 180;
 }
 
-var ColorPalette = function(colors) {
-    var self = this;
-    // Make colors publically available (necessary?)
-    Object.keys(colors).forEach(function(key,index) {
-        self[key] = colors[key];
-    });
 
-    // Return a random color
-    this.random = function() {
-        var keys = Object.keys(colors);
-        return colors[keys[getRandomInt(0, keys.length)]];
-    };
-};
-
-const BUG_COLORS = new ColorPalette({
-    RED:    {name: "Red",    value: 0xDD2222},
-    YELLOW: {name: "Yellow", value: 0xDDDD22},
-    BLUE:   {name: "Blue",   value: 0x2222DD},
-});
 
 
 

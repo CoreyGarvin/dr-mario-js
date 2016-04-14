@@ -49,10 +49,16 @@ var CpuPlayer = function(sourceGame) {
     
     // Mutates the game, returns score
     var scoreGame = function(game) {
+        if (game.map.entranceBlocked()) {
+            return Number.NEGATIVE_INFINITY;
+        }
+        // return game.map.bugCount * -2;
         game = game.copy();
-        game.map.settleAndDestroy();
+        // game.map.settleAndDestroy();
+        game.map.settleAndDestroy(game.pill.positions());
         return (game.map.verticalStreaks().length * -2) +
-               (game.map.horizontalStreaks().length * -1);
+               (game.map.horizontalStreaks().length * -1) +
+               (game.map.bugCount * -2);
     };
 
 
@@ -65,19 +71,19 @@ var CpuPlayer = function(sourceGame) {
         // Recursion depth
         depth = depth || 1;
 
-        // Because you have no options!
-        if (srcGame.map.entranceBlocked()) {
-            return [];
-        }
-
         // Copy incoming game to avoid mutating it
         srcGame = srcGame.copy();
 
         // If this is a follow-up move, do physics
         // and bring in the next pill
         if (depth > 1) {
-            srcGame.map.settleAndDestroy();
-            srcGame.enterNextPill();
+            // srcGame.map.settleAndDestroy();
+            srcGame.map.settleAndDestroy(srcGame.pill.positions());
+
+            if (!srcGame.enterNextPill()) {
+                // console.log("could not bring in next pill");
+                return [];
+            }
         }
         // Our working copy
         var game = srcGame.copy();
@@ -101,13 +107,23 @@ var CpuPlayer = function(sourceGame) {
                     var option = game.pill.copy();
                     // Go deeper if possible
                     if (depth == 1) {
+                        // Find all suboptions
                         option.options = findOptions(game, depth + 1);
-                        option.options.sort(function(a, b) {
-                            return b.score - a.score;
-                        });
-                        option.score = option.options[0].score;
+
+                        // An option's score is the best score of
+                        // it's sub-options
+                        if (option.options.length) {
+                            option.options.sort(function(a, b) {
+                                return b.score - a.score;
+                            });
+                            option.score = option.options[0].score;
+                        } else {
+                            option.score = scoreGame(game);
+                        }
+                        // for benchmarking
                         option.length = option.options.length;
                     } else {
+                        // game.map.print();
                         option.score = scoreGame(game);
                     }
                     options.push(option);
@@ -123,9 +139,35 @@ var CpuPlayer = function(sourceGame) {
         // }, 3000);
     };
 
+    self.playerTurn = function() {
+        // currentOptions = [];
+        // copySourceGame();
+        // self.events.emit("gameStateRefresh", game);
+        var a = performance.now();
+        var options = findOptions(sourceGame);
+        options.sort(function(a, b) {
+            return b.score - a.score;
+        });
+        var b = performance.now();
+
+        var nOptions = options.reduce(function(a, b) {
+          return a + b.options.length;
+        }, 0);
+        var ms = b - a;
+        console.log("Depth 1 options: " + options.length);
+        console.log(nOptions + " in " + Math.floor(ms) + "ms = " + Math.floor(nOptions/(ms/1000)) + "/s");
+
+        if (options[0]) {
+            while(!sourceGame.pill.isRotatedLike(options[0])) {
+                sourceGame.rotatePill(true);
+            }
+            sourceGame.warpPill(options[0].cells[0].position);
+        }
+    };
+
     sourceGame.events.register(function() {
-        var gameInitialized = function(newGame) {
-            sourceGame = newGame;
+        var gameInitialized = function(game) {
+            sourceGame = game;
             // game = sourceGame.copy();
             // self.events.emit("gameStateRefresh", game);
         };
@@ -135,37 +177,24 @@ var CpuPlayer = function(sourceGame) {
             // self.events.emit("gameStateRefresh", game);
             var a = performance.now();
             var options = findOptions(sourceGame);
+            options.sort(function(a, b) {
+                return b.score - a.score;
+            });
             var b = performance.now();
 
             var nOptions = options.reduce(function(a, b) {
-              return a + b.length;
+              return a + b.options.length;
             }, 0);
-            var s = (b - a)/1000;
-            console.log(nOptions + " in " + s + "s = " + nOptions/s + "/s");
+            var ms = b - a;
+            console.log("Depth 1 options: " + options.length);
+            console.log(nOptions + " in " + Math.floor(ms) + "ms = " + Math.floor(nOptions/(ms/1000)) + "/s");
 
-            // scoreOptions(options);
-            // self.events.emit("gameStateRefresh", game);
-            // Sort by row, so that lowest items are processed first
-            console.log("yay we got out");
-            // alert("yay");
-            // options.sort(function(a, b) {
-            //     return b.score - a.score});
-
-            // currentOptions = options;
-            // console.log(options);
-
-            // // movePillToMimic(currentOptions[0]);
-            // // sourcegame.pill.warpTo(sourceGame.startPosition);
-            // while(!sourcegame.pill.isRotatedLike(options[0])) {
-            //     sourcegame.pill.rotate(false, 1, true);
-            // }
-            // sourcegame.pill.warpTo(options[0].position());
-            // if (!self.optionBrowsing) return Promise.resolve();
-
-            // self.events.emit("gameStateRefresh", game);
-            // return new Promise(function(resolve, reject) {
-            //     currentResolve = resolve;
-            // });
+            if (options[0]) {
+                while(!sourceGame.pill.isRotatedLike(options[0])) {
+                    sourceGame.rotatePill(true);
+                }
+                sourceGame.warpPill(options[0].cells[0].position);
+            }
         };
 
         var cellCreated = function(cell) {
@@ -194,9 +223,9 @@ var CpuPlayer = function(sourceGame) {
                 // cellCreated: cellCreated,
                 // cellDestroyed: cellDestroyed,
                 // nowOnDeck: nowOnDeck,
-                playerTurn: playerTurn,
-                gameOver: gameOver,
-                win: onWin,
+                // playerTurn: playerTurn,
+                // gameOver: gameOver,
+                // win: onWin,
             }
         );
     }());

@@ -271,9 +271,11 @@
         bodyDef.type = Box2D.Dynamics.b2Body.b2_staticBody;
 
         var game = new DrMarioGame({name: "Main"});
-        var cpuPlayer = null;
+        // game.map = testMap;
+        console.log(game.map.toString());
+        // var cpuPlayer = null;
         if (true) {
-            cpuPlayer = new CpuPlayer(game);
+            var cpuPlayer = new CpuPlayer(game);
             cpuPlayer.events.register(function() {
                 var simActors = [];
                 var gameStateRefresh = function(g) {

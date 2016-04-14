@@ -9,11 +9,11 @@ var DrMarioGame = function(config) {
         name: config.name || "Game " + ++DrMarioGame.instances,
         rows: config.rows || 17,
         cols: config.cols || 8,
-        bugs: config.bugs || 10,
+        bugs: config.bugs || 95,
         pillQ: config.pillQ || [],
         pill: config.pill || null,
         state: config.state || 0,
-        stepTime: config.step || 1600,
+        stepTime: config.step || 500,
         map: config.map || null
     };
     this.name = config.name;
@@ -71,41 +71,52 @@ DrMarioGame.prototype.copy = function() {
 
 DrMarioGame.prototype.enterNextPill = function() {
     this.pill = this.pillQ.shift();
-    if (!this.map.adds(this.pill.cells, this.startPositions)) {
-        console.error("playerTurn: couldnt add pill to map");
-        alert("playerTurn: couldnt add pill to map");
-        return;
-    }
+    return this.map.adds(this.pill.cells, this.startPositions);
+    // if (!this.map.adds(this.pill.cells, this.startPositions)) {
+    //     console.error("playerTurn: couldnt add pill to map");
+    //     alert("playerTurn: couldnt add pill to map");
+    //     return false;
+    // }
+    // return true;
 };
 
 DrMarioGame.prototype.start = function() {
     var game = this;
     var playerTurn = function() {
-        if (game.map.empties(game.startPositions)) {
-            game.turnCount++;
-            game.enterNextPill();
 
+        if (game.enterNextPill()) {
+            game.turnCount++;
             game.pillQ.push(new Pill());
             game.events.emit("nowOnDeck", game.pillQ[0].cells);
-
             game.state = DrMarioGame.STATE.PLAYER_CONTROL;
-            game.events.emit("playerTurn")
-            .then(playerTurnStep, logError);
+            var cpuPlayer = new CpuPlayer(game);
+            cpuPlayer.playerTurn();
+            playerTurnStep();
+
+            // game.events.emit("playerTurn")
+            // .then(playerTurnStep, logError);
         } else {
             gameOver();
         }
     };
 
     var playerTurnStep = function() {
+        // game.map.sanityCheck("start Player turn step");
         clearTimeout(game.timer);
         game.map.print();
         game.timer = setTimeout(function() {
             if (game.map.offsetTogether(game.pill.positions(), Position(1, 0))) {
                 playerTurnStep();
             } else {
-                physicsTurn();
+                game.endPlayerTurn();
             }
         }, game.stepTime);
+    };
+
+    this.endPlayerTurn = function() {
+        clearTimeout(game.timer);
+        log("end player turn");
+        physicsTurn();
     };
 
     this.resetPlayerTimer = function() {
@@ -121,6 +132,30 @@ DrMarioGame.prototype.start = function() {
         physicsStep();
     };
 
+    // var physicsStep = function() {
+    //     game.map.print();
+    //     clearTimeout(game.timer);
+    //     if (!game.map.bugCount) {
+    //         return win();
+    //     }
+
+    //     game.timer = setTimeout(function() {
+    //         // Settle while possible
+    //         if (game.map.settle()) {
+    //             physicsStep();
+    //         // Then kill blocks, repeat
+    //         } else {
+    //             var posArr = game.map.killables(null, 4);
+    //             // Kill cells, should resolve immediately if none
+    //             if (posArr.length) {
+    //                 destroyCells(posArr).then(physicsStep);
+    //             } else {
+    //                 playerTurn();
+    //             }
+    //         }
+    //     }, game.stepTime);
+    // };
+
     var physicsStep = function() {
         game.map.print();
         clearTimeout(game.timer);
@@ -131,13 +166,16 @@ DrMarioGame.prototype.start = function() {
         game.timer = setTimeout(function() {
             // Settle while possible
             if (game.map.settle()) {
+                // game.map.sanityCheck("after settle");
                 physicsStep();
             // Then kill blocks, repeat
             } else {
-                var posArr = game.map.killables(4);
+                // game.map.sanityCheck("after settle");
+                var posArr = game.map.killables(null, 4);
                 // Kill cells, should resolve immediately if none
                 if (posArr.length) {
-                    destroyCells(posArr).then(physicsStep);
+                    destroyCells(posArr)
+                    physicsStep();
                 } else {
                     playerTurn();
                 }
@@ -145,20 +183,24 @@ DrMarioGame.prototype.start = function() {
         }, game.stepTime);
     };
 
+    // var destroyCells = function(posArr) {
+    //     var cells = game.map.ats(posArr);
+    //     return Promise.all(
+    //         cells.map(function(cell) {
+    //             return game.events.emit("cellDestroyed", cell);
+    //         })
+    //     ).then(function() {
+    //         game.map.destroy(posArr);
+    //     });
+    // };
+
     var destroyCells = function(posArr) {
-        var cells = game.map.ats(posArr);
-        return Promise.all(
-            cells.map(function(cell) {
-                return game.events.emit("cellDestroyed", cell);
-            })
-        ).then(function() {
-            game.map.destroy(posArr);
-        });
+        game.map.destroy(posArr);
     };
 
     var win = function() {
         game.state = DrMarioGame.STATE.GAME_WON;
-        console.log("WIN after " + turnCount + " turns");
+        console.log("WIN after " + game.turnCount + " turns");
         game.events.emit("win");
     };
 
@@ -254,7 +296,12 @@ DrMarioGame.prototype.playerInput = function(cmd) {
 
     // Perform the action
     var parts = cmd.split(" ");
-    if (!this[parts[0] + "Pill"](parts[1])) {return false;}
+    if (!this[parts[0] + "Pill"](parts[1])) {
+        if (cmd == "move down") {
+            this.endPlayerTurn();
+        }
+        return false;
+    }
 
     // for debug
     this.map.print();
@@ -336,5 +383,10 @@ DrMarioGame.prototype.playerInput = function(cmd) {
 //         console.log(map.horizontalStreaks(1, null, collect));
 //     }
 // };
+
+DrMarioGame.prototype.print = function() {
+    this.map.print();
+    this.pill.print();
+};
 
 DrMarioGame.instances = 0;
