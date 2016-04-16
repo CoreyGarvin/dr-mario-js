@@ -8,6 +8,7 @@ var PositionPool = (function(rows, cols, pad) {
     var Position = function(row, col) {
         this.row = row;
         this.col = col;
+        this.hash = row * rows + col;
     };
 
     var getCached = function(row, col) {

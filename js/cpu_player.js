@@ -56,9 +56,21 @@ var CpuPlayer = function(sourceGame) {
         game = game.copy();
         // game.map.settleAndDestroy();
         game.map.settleAndDestroy(game.pill.positions());
-        return (game.map.verticalStreaks().length * -2) +
-               (game.map.horizontalStreaks().length * -1) +
-               (game.map.bugCount * -2);
+
+        if (game.map.occupancy() > .4) {
+            return -1 * (
+                   // (game.map.bugHealth() / 5)
+                   (game.map.verticalStreaks().length * 2) +
+                   (game.map.horizontalStreaks().length * 1)
+                );
+        } else {
+            return -1 * (
+               (game.map.bugHealth() / 5)
+               // (game.map.verticalStreaks().length * 1) +
+               // (game.map.horizontalStreaks().length * 1)
+            );
+        }
+
     };
 
 

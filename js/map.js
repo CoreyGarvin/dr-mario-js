@@ -8,6 +8,8 @@ const BUGS = [
 var Map = function(rows, cols, nBugs, cells) {
     // var map = this;
     this.bugCount = 0;
+    this.occupantCount = 0;
+    this.bugPositions = {};
     this.positions = PositionPool.allPositions();
     this.rows = rows || 17;
     this.cols = cols || 8;
@@ -15,7 +17,7 @@ var Map = function(rows, cols, nBugs, cells) {
 
 
     if (!cells) {
-        if(true) {
+        if(false) {
             // return Map.fromString("17 8 - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - yB yB - - - - - - - rB rB - - - - - - - - - rB rB - - - rB yB - - rB - rB - - yB - rB yB yB - rB - - - - bB - - rB - - - - - - - - yB - - - rB - rB yB - - - - - - - - - - yB - - - - - - - - rB rB yB bB - bB - - yB rB - yB - - - - - -");
             // return testMap;
             while (this.bugCount < nBugs) {
@@ -127,9 +129,12 @@ Map.prototype.set = function(pos, val, test, replace) {
         if (!replace) {return false;}
         if (test)     {return pos;}
 
+        // We're overwriting a bug
         if (occupant.type === Cell.TYPE.BUG) {
             this.bugCount--;
+            this.bugPositions[pos.hash] = null;
         }
+        this.occupantCount--;
         occupant.position = null;
     } else if (test) {
         return pos;
@@ -138,8 +143,10 @@ Map.prototype.set = function(pos, val, test, replace) {
     if (val) {
         if (val.type === Cell.TYPE.BUG) {
             this.bugCount++;
+            this.bugPositions[pos.hash] = pos;
         }
         val.position = pos;
+        this.occupantCount++;
     }
     this.cells[pos.row * this.cols + pos.col] = val;
     return pos;
@@ -357,6 +364,33 @@ Map.prototype.randomBlankPosition = function(rowMin, rowMax, colMin, colMax) {
 Map.byRow = function(a, b) {return b.row - a.row || b.col - a.col;};
 Map.byCol = function(a, b) {return b.col - a.col || b.row - a.row;};
 
+Map.prototype.emptyStreak = function(position, horizontal) {
+    var directions = horizontal ? ["right", "left"] : ["below", "above"];
+    if (!this.empty(position)) {
+        alert("this muffucka");
+        return [];
+    }
+    var streak = [],
+        pos = position;
+
+    do {
+        // Collect
+        streak.unshift(pos);
+        // Move
+        pos = pos[directions[0]]();
+    } while (this.empty(pos));
+
+    // Rewind, then go left or up
+    pos = position[directions[1]]();
+    cell = this.at(pos);
+    while (this.empty(pos)) {
+        // Collect
+        streak.push(pos);
+        // Move
+        pos = pos[directions[1]]();
+    }
+    return streak;
+};
 // Given a set of positions, returns [ ] of streaks (each an [ ] of Positions).
 // If an {} is passed in as 'collector', it will used to accumulate unique
 // positions in it's values
@@ -374,6 +408,7 @@ Map.prototype.positionStreaks = function(minLength, positions, horizontal, colle
     for (var i = 0; i < positions.length; i++) {
         pos = positions[i];
         cell = this.at(pos);
+
         // Skip blanks
         if (!cell) {
             alert("positionStreaks hint provided empty position " + pos.toString());
@@ -385,7 +420,7 @@ Map.prototype.positionStreaks = function(minLength, positions, horizontal, colle
         color = cell.color;
         do {
             // Collect
-            streak.push(pos);
+            streak.unshift(pos);
 
             // Move
             pos = pos[directions[0]]();
@@ -435,6 +470,161 @@ Map.prototype.positionStreaks = function(minLength, positions, horizontal, colle
         }
     }
     return streaks;
+};
+
+Map.prototype.occupancy = function() {
+    return this.occupantCount / (this.rows * this.cols);
+};
+
+var HP = 10;
+var FULLHP = 3 * HP;
+
+Map.prototype.healthAt = function(position, healthyColor, multiplier, horizontal) {
+    multiplier = multiplier || 1;
+    var cell = this.at(position);
+    if (cell) {
+        // We've reached a different bug, escape
+        if (cell.type === Cell.TYPE.BUG && healthyColor != null) {
+            return 0;
+        } else {
+            // Entry point for new recursive call
+            // healthyColor = healthyColor || cell.color;
+
+            // Healthy color subtracts health, otherwise add full health
+            var healthDelta = multiplier * (cell.color === healthyColor ? -HP : FULLHP);
+
+            return healthDelta + this.healthAt(position.above(), cell.color, multiplier, horizontal);
+        }
+    }
+    // Empty cell
+    else if (cell === null) {
+        if (!healthyColor) {
+            alert("no healthyColor ever defined");
+            return;
+        }
+        // Jump to after empties
+        var nextPos = this.emptyStreak(position).pop().above();
+        return this.healthAt(nextPos, healthyColor, 1, horizontal);
+    }
+    // Cell is OOB
+    return 0;
+};
+
+Map.prototype.getHealthAt = function(position, horizontal) {
+    // Do not let values get to zero if they still exist
+    return Math.max(HP / 2, this.healthAt(position, null, null, horizontal));
+};
+
+Map.prototype.bugHealth = function(horizontal) {
+    var pos = null,
+        cell = null,
+        positions = this.positions,
+        totalHealth = 0;
+
+    // For each position, find streak
+    for (var i = 0; i < positions.length; i++) {
+        pos = positions[i];
+        cell = this.at(pos);
+
+        // Skip non-bugs
+        if (!cell || cell.type !== Cell.TYPE.BUG) {continue;}
+        totalHealth += this.getHealthAt(pos, horizontal);
+    }
+    return totalHealth;
+};
+
+Map.prototype.bugHealth2 = function(horizontal) {
+    // positions = this.bugPositions
+    // for (var i = 0; i < this.positions.length; i++) {
+    //     var pos = positions[i];
+    //     var cell = this.at(pos);
+    //     // Skip non-bugs
+    //     if (!cell || cell.type !== Cell.TYPE.BUG) {continue;}
+    //     var health = 3;
+
+    //     // Go upwards
+    //     var nextPos = pos.above();
+    //     while (true) {
+    //         var nextCell = this.at(nextPos);
+    //         if 
+    //     }
+    // }
+
+    var color = null,
+        pos = null,
+        cell = null,
+        positions = this.positions,
+        health = 0,
+        totalHealth = 0;
+
+    var directions = horizontal ? ["right", "left"] : ["below", "above"];
+    // For each position, find streak
+    for (var i = 0; i < positions.length; i++) {
+        pos = positions[i];
+        cell = this.at(pos);
+
+        // Skip non-bugs
+        if (!cell || cell.type !== Cell.TYPE.BUG) {continue;}
+
+        health = 30;
+        color = cell.color;
+
+        // PHASE 1: Find consecutive colors, lower health score
+
+        // Go right/down, find consecutive colors
+        pos = pos[directions[0]]();
+        cell = this.at(pos);
+        while (
+            cell &&
+            cell.color === color
+        ) {
+            health -= 10;
+            pos = pos[directions[0]]();
+            cell = this.at(pos);
+        }
+        // Rewind, then go other direction
+        pos = positions[i][directions[1]]();
+        cell = this.at(pos);
+        while (
+            cell &&
+            cell.color === color
+        ) {
+            health -= 10;
+            pos = pos[directions[1]]();
+            cell = this.at(pos);
+        }
+        totalHealth += Math.max(0, health);
+    }
+    return totalHealth;
+
+
+        // Dif colored cell
+      /*  var nextColor = null;
+        if (!cell || cell.type === Cell.TYPE.BUG) {
+            // end that direcction
+        } else {
+
+        }
+            if (!cell.type === Cell.TYPE.BUG) {
+                // end of health count
+            }
+            nextColor = cell.color;
+        }
+        while (cell) {
+            health += 10;
+            pos = pos[directions[0]]();
+            cell = this.at(pos);
+            var newColor = cell.color;
+        }
+        // Found blank
+        else {
+
+        }*/
+
+
+
+
+
 };
 
 Map.prototype.horizontalStreaks = function(minLength, positions, collector) {
@@ -764,7 +954,7 @@ Map.prototype.toString = function() {
            }).join(" ");
 };
 
-Map.prototype.print = function() {
+Map.prototype.print2 = function() {
     // styledConsoleLog('<span style="color:hsl(0, 100%, 90%);background-color:hsl(0, 100%, 50%);"> Red </span> <span style="color:hsl(39, 100%, 85%);background-color:hsl(39, 100%, 50%);"> Orange </span> <span style="color:hsl(60, 100%, 35%);background-color:hsl(60, 100%, 50%);"> Yellow </span> <span style="color:hsl(120, 100%, 60%);background-color:hsl(120, 100%, 25%);"> Green </span> <span style="color:hsl(240, 100%, 90%);background-color:hsl(240, 100%, 50%);"> Blue </span> <span style="color:hsl(300, 100%, 85%);background-color:hsl(300, 100%, 25%);"> Purple </span> <span style="color:hsl(0, 0%, 80%);background-color:hsl(0, 0%, 0%);"> Black </span>');
 
     // var line = "__________________________\n";
@@ -790,4 +980,57 @@ Map.prototype.print = function() {
     // return s + "\n" + line;
 };
 
+
+
+Map.prototype.print = function() {
+    // styledConsoleLog('<span style="color:hsl(0, 100%, 90%);background-color:hsl(0, 100%, 50%);"> Red </span> <span style="color:hsl(39, 100%, 85%);background-color:hsl(39, 100%, 50%);"> Orange </span> <span style="color:hsl(60, 100%, 35%);background-color:hsl(60, 100%, 50%);"> Yellow </span> <span style="color:hsl(120, 100%, 60%);background-color:hsl(120, 100%, 25%);"> Green </span> <span style="color:hsl(240, 100%, 90%);background-color:hsl(240, 100%, 50%);"> Blue </span> <span style="color:hsl(300, 100%, 85%);background-color:hsl(300, 100%, 25%);"> Purple </span> <span style="color:hsl(0, 0%, 80%);background-color:hsl(0, 0%, 0%);"> Black </span>');
+
+    // var line = "__________________________\n";
+    var s = this.toString();
+    s += "\n  \t 0 1 2 3 4 5 6 7";
+    var pos = {};
+    for (var i = 0; i < this.positions.length; i++) {
+        if (this.positions[i].row !== pos.row) {
+            if (pos.row == 0) {
+                s += "\t\tFull:\t" + Math.floor(this.occupancy() * 100) + "%\t(" + this.occupantCount + ")";
+            }
+            if (pos.row == 1) {
+                s += "\t\tBugs:\t" + this.bugCount + "\t(" + Math.floor(this.bugCount/this.occupantCount * 100) + "% of occupants)";
+            }
+            s += "\n" + this.positions[i].row + "\t";
+        }
+        pos = this.positions[i];
+        var cell = this.at(pos);
+        if (cell) {
+            var text = cell.type.shortName;
+            var color = cell.color.name == "Yellow" ? "black" : "white";
+
+            // show bug health
+            if (cell.type === Cell.TYPE.BUG) {
+                var health = this.getHealthAt(pos)/10;
+                if (health > 0 && health < 1) {
+                    text = "**";
+                } else {
+                    text = Math.ceil(health);
+                    if (text > 99) {
+                        text = "++";
+                    } else {
+                        text = padDigits(text, 2);
+                    }
+                }
+
+            }
+            s += '<span style="color:' + color + ';background-color: #' + cell.color.value.toString(16) + ';">' + text + '</span>';
+        }
+        else s += '<span style="color:hsl(0, 100%, 90%);background-color: black;">  </span>';
+    }
+    s+="\n  \t 0 1 2 3 4 5 6 7";
+    styledConsoleLog(s);
+    // return s + "\n" + line;
+};
+
 var testMap = Map.fromString("17 8 - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - yB - - - yB - - - - - - - - - - - - - rB - - rB - - - rB - - yB - - - yB - - - yB - bB - - yB r^ rB - - - - - - bU yB - - - bO yB - bB rB - - bB bO - r( b) - - - - yB yB - bB - - - - bB - r( b) - - - - - yB - rB bB - - - bB -");
+
+function padDigits(number, digits) {
+    return Array(Math.max(digits - String(number).length + 1, 0)).join(0) + number;
+}

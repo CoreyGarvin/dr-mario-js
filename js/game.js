@@ -103,7 +103,7 @@ DrMarioGame.prototype.start = function() {
     var playerTurnStep = function() {
         // game.map.sanityCheck("start Player turn step");
         clearTimeout(game.timer);
-        game.map.print();
+        game.print();
         game.timer = setTimeout(function() {
             if (game.map.offsetTogether(game.pill.positions(), Position(1, 0))) {
                 playerTurnStep();
@@ -157,7 +157,7 @@ DrMarioGame.prototype.start = function() {
     // };
 
     var physicsStep = function() {
-        game.map.print();
+        game.print();
         clearTimeout(game.timer);
         if (!game.map.bugCount) {
             return win();
@@ -310,7 +310,7 @@ DrMarioGame.prototype.playerInput = function(cmd) {
     }
 
     // for debug
-    this.map.print();
+    this.print();
 
     // Pill has moved down, reset steptimer
     if (this.pill.cells[0].position.row > row) {
@@ -391,8 +391,12 @@ DrMarioGame.prototype.playerInput = function(cmd) {
 // };
 
 DrMarioGame.prototype.print = function() {
-    this.map.print();
+    console.log("----------------------------------------------------------");
     this.pill.print();
+    this.map.print();
+    console.log("Turn:\t" + this.turnCount);
+    console.log("----------------------------------------------------------");
+
 };
 
 DrMarioGame.instances = 0;

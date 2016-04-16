@@ -10,7 +10,7 @@ Pill.prototype.toString = function() {
     // H or V
     return (this.isHorz() ? "H" : "V") +
             "(" + this.cells[0].toChar() + this.cells[1].toChar() + ")" +
-            this.cells[0].position ? " @ " + this.cells[0].position.toString : "";
+            (this.cells[0].position ? (" @ " + this.cells[0].position.toString()) : "");
 
     // // Color abbreviation
     // s += "(" + this.cells.map(function(part) {
@@ -83,7 +83,7 @@ Pill.prototype.copy = function() {
 Pill.prototype.isHorz = function() {
     // return this.cells[0].type === TYPE.LEFT;
     // if (this.positions())
-    return this.cells[0].position != null && this.cells[0].position != null &&
+    return this.cells[0].position != null && this.cells[1].position != null &&
            this.cells[0].position.row === this.cells[1].position.row;
 };
 
@@ -103,7 +103,7 @@ Pill.prototype.print = function() {
         var text = text = cell.type.shortName;
         s += '<span style="color:' + color + ';background-color: #' + cell.color.value.toString(16) + ';">' + text + '</span>';
     }
-    s += " @ " + this.cells[0].position ? this.cells[0].position.toString() : "null";
+    // s += " @ " + this.cells[0].position ? this.cells[0].position.toString() : "null";
     styledConsoleLog(s);
 };
 
