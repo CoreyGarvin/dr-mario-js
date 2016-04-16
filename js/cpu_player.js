@@ -97,12 +97,14 @@ var CpuPlayer = function(sourceGame) {
 
             // Test every rotation
             for(var rotation = 0; rotation < nRots; rotation++) {
+
+                // Move pill home and rotate
                 if (rotation && (!game.warpPillHome() || !game.rotatePill(true))) {
                     console.log("Could not rotate pill");
                     alert("this really f'ing sucks");
                 }
 
-                // Warp to position
+                // Warp to target position
                 if (game.warpPill(pos) && game.isPillSettled()) {
                     var option = game.pill.copy();
                     // Go deeper if possible

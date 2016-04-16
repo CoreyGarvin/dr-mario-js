@@ -13,7 +13,7 @@ var DrMarioGame = function(config) {
         pillQ: config.pillQ || [],
         pill: config.pill || null,
         state: config.state || 0,
-        stepTime: config.step || 500,
+        stepTime: config.step || 200,
         map: config.map || null
     };
     this.name = config.name;
@@ -202,6 +202,12 @@ DrMarioGame.prototype.start = function() {
         game.state = DrMarioGame.STATE.GAME_WON;
         console.log("WIN after " + game.turnCount + " turns");
         game.events.emit("win");
+
+        // inifite Testing
+        var newGame = new DrMarioGame();
+        // var cpuPlayer = new CpuPlayer(newGame);
+        console.clear();
+        newGame.start();
     };
 
     var gameOver = function() {
