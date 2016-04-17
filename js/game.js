@@ -9,7 +9,7 @@ var DrMarioGame = function(config) {
         name: config.name || "Game " + ++DrMarioGame.instances,
         rows: config.rows || 17,
         cols: config.cols || 8,
-        bugs: config.bugs || 95,
+        bugs: config.bugs || 3,
         pillQ: config.pillQ || [],
         pill: config.pill || null,
         state: config.state || 0,
@@ -82,6 +82,7 @@ DrMarioGame.prototype.enterNextPill = function() {
 
 DrMarioGame.prototype.start = function() {
     var game = this;
+    game.initialBugs = game.map.bugCount;
     var playerTurn = function() {
 
         if (game.enterNextPill()) {
@@ -391,11 +392,18 @@ DrMarioGame.prototype.playerInput = function(cmd) {
 // };
 
 DrMarioGame.prototype.print = function() {
-    console.log("----------------------------------------------------------");
+    // console.log("----------------------------------------------------------");
     this.pill.print();
-    this.map.print();
-    console.log("Turn:\t" + this.turnCount);
-    console.log("----------------------------------------------------------");
+    if (this.pillQ[0]) {
+        this.pillQ[0].print();
+    }
+    this.map.print([
+        {name: "Turn:    ", text: this.turnCount},
+        {name: "Kills:   ", text: this.initialBugs - this.map.bugCount},
+        {name: "Pill/Kill", text: (this.turnCount / (this.initialBugs - this.map.bugCount)).toFixed(2)},
+    ]);
+    // console.log("Turn:\t" + this.turnCount);
+    // console.log("----------------------------------------------------------");
 
 };
 

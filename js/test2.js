@@ -271,7 +271,7 @@
         bodyDef.type = Box2D.Dynamics.b2Body.b2_staticBody;
 
         var game = new DrMarioGame({name: "Main"});
-        // game.map = testMap;
+        game.map = testMap2;
         console.log(game.map.toString());
         // var cpuPlayer = null;
         if (true) {
@@ -610,7 +610,7 @@
             // displacementFilter.maskMatrix.g = t / 10;
             // displacementFilter.scale.x = 1+Math.sin(Date.now()/1000);
         }
-        
+
         waterWaves.tilePosition.x = t / -20;//blurAmount * 40;
         waterWaves.tilePosition.y = t / -20;
 

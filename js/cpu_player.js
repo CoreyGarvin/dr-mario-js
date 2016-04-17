@@ -57,20 +57,43 @@ var CpuPlayer = function(sourceGame) {
         // game.map.settleAndDestroy();
         game.map.settleAndDestroy(game.pill.positions());
 
-        if (game.map.occupancy() > .4) {
-            return -1 * (
-                   // (game.map.bugHealth() / 5)
-                   (game.map.verticalStreaks().length * 2) +
-                   (game.map.horizontalStreaks().length * 1)
-                );
-        } else {
-            return -1 * (
-               (game.map.bugHealth() / 5)
-               // (game.map.verticalStreaks().length * 1) +
-               // (game.map.horizontalStreaks().length * 1)
-            );
+        if (game.map.bugCount == 0) {
+            return Number.POSITIVE_INFINITY;
         }
 
+        return scoreGame4(game);
+
+        if (game.map.occupancy() > .4) {
+
+        } else {
+
+        }
+
+    };
+
+    // Least amount of streaks
+    var scoreGame1 = function(game) {
+        return (game.map.verticalStreaks().length * -1) +
+               (game.map.horizontalStreaks().length * -1);
+    };
+
+    // Prioritizes vertical streaks + lower # of bugs
+    var scoreGame2 = function(game) {
+        return (game.map.verticalStreaks().length * -2) +
+               (game.map.horizontalStreaks().length * -1) +
+               (game.map.bugCount * -2);
+    };
+
+    // Purely based on bughealth
+    var scoreGame3 = function(game) {
+        return -game.map.bugHealth() - (game.map.bugCount * 10);
+    };
+
+    // Purely based on bughealth
+    var scoreGame4 = function(game) {
+        return -game.map.bugHealth() - (game.map.bugCount * 10)
+               -(game.map.verticalStreaks().length * 2)
+               -(game.map.horizontalStreaks().length * 1);
     };
 
 
@@ -91,6 +114,11 @@ var CpuPlayer = function(sourceGame) {
         if (depth > 1) {
             // srcGame.map.settleAndDestroy();
             srcGame.map.settleAndDestroy(srcGame.pill.positions());
+
+            // Player has won after first move
+            if (srcGame.map.bugCount == 0) {
+                return [{score: Number.POSITIVE_INFINITY}];
+            }
 
             if (!srcGame.enterNextPill()) {
                 // console.log("could not bring in next pill");
@@ -118,6 +146,7 @@ var CpuPlayer = function(sourceGame) {
 
                 // Warp to target position
                 if (game.warpPill(pos) && game.isPillSettled()) {
+                    game.print();
                     var option = game.pill.copy();
                     // Go deeper if possible
                     if (depth == 1) {
@@ -131,8 +160,12 @@ var CpuPlayer = function(sourceGame) {
                                 return b.score - a.score;
                             });
                             option.score = option.options[0].score;
+                            // Return first winning score
+                            if (option.score == Number.POSITIVE_INFINITY) {
+                                return [option];
+                            }
                         } else {
-                            option.score = scoreGame(game);
+                            option.score = Number.NEGATIVE_INFINITY;
                         }
                         // for benchmarking
                         option.length = option.options.length;

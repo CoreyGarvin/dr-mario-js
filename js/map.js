@@ -17,7 +17,7 @@ var Map = function(rows, cols, nBugs, cells) {
 
 
     if (!cells) {
-        if(false) {
+        if(true) {
             // return Map.fromString("17 8 - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - yB yB - - - - - - - rB rB - - - - - - - - - rB rB - - - rB yB - - rB - rB - - yB - rB yB yB - rB - - - - bB - - rB - - - - - - - - yB - - - rB - rB yB - - - - - - - - - - yB - - - - - - - - rB rB yB bB - bB - - yB rB - yB - - - - - -");
             // return testMap;
             while (this.bugCount < nBugs) {
@@ -950,7 +950,7 @@ Map.prototype.toString = function() {
                 if (cell) {
                     return cell.toString();
                 }
-                return "-";
+                return "--";
            }).join(" ");
 };
 
@@ -982,7 +982,7 @@ Map.prototype.print2 = function() {
 
 
 
-Map.prototype.print = function() {
+Map.prototype.print = function(miscStats) {
     // styledConsoleLog('<span style="color:hsl(0, 100%, 90%);background-color:hsl(0, 100%, 50%);"> Red </span> <span style="color:hsl(39, 100%, 85%);background-color:hsl(39, 100%, 50%);"> Orange </span> <span style="color:hsl(60, 100%, 35%);background-color:hsl(60, 100%, 50%);"> Yellow </span> <span style="color:hsl(120, 100%, 60%);background-color:hsl(120, 100%, 25%);"> Green </span> <span style="color:hsl(240, 100%, 90%);background-color:hsl(240, 100%, 50%);"> Blue </span> <span style="color:hsl(300, 100%, 85%);background-color:hsl(300, 100%, 25%);"> Purple </span> <span style="color:hsl(0, 0%, 80%);background-color:hsl(0, 0%, 0%);"> Black </span>');
 
     // var line = "__________________________\n";
@@ -992,11 +992,23 @@ Map.prototype.print = function() {
     for (var i = 0; i < this.positions.length; i++) {
         if (this.positions[i].row !== pos.row) {
             if (pos.row == 0) {
-                s += "\t\tFull:\t" + Math.floor(this.occupancy() * 100) + "%\t(" + this.occupantCount + ")";
+                s += "\t\tFull:   \t" + Math.floor(this.occupancy() * 100) + "%\t(" + this.occupantCount + ")";
             }
             if (pos.row == 1) {
-                s += "\t\tBugs:\t" + this.bugCount + "\t(" + Math.floor(this.bugCount/this.occupantCount * 100) + "% of occupants)";
+                s += "\t\tBugs:   \t" + this.bugCount + "\t(" + Math.floor(this.bugCount/this.occupantCount * 100) + "% of occupants)";
             }
+            if (pos.row == 2) {
+                s += "\t\tBugHP:  \t" + this.bugHealth();
+            }
+            if (pos.row == 3) {
+                s += "\t\tStreaks:\t" + this.verticalStreaks().length + "/" + this.horizontalStreaks().length + "\t(V/H)";
+            }
+            if (pos.row > 4 && miscStats && miscStats[pos.row - 5]) {
+                var stat = miscStats[pos.row - 5];
+                s += "\t\t" + stat.name + ":\t" + stat.text;
+            }
+
+            // Row #
             s += "\n" + this.positions[i].row + "\t";
         }
         pos = this.positions[i];
@@ -1030,6 +1042,7 @@ Map.prototype.print = function() {
 };
 
 var testMap = Map.fromString("17 8 - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - yB - - - yB - - - - - - - - - - - - - rB - - rB - - - rB - - yB - - - yB - - - yB - bB - - yB r^ rB - - - - - - bU yB - - - bO yB - bB rB - - bB bO - r( b) - - - - yB yB - bB - - - - bB - r( b) - - - - - yB - rB bB - - - bB -");
+var testMap2 = Map.fromString("17 8 -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- y( r) -- -- -- -- -- -- -- y( b) -- -- -- -- -- -- r( b) -- -- -- -- -- -- -- bB -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- y( r) -- -- -- -- -- -- -- rO -- -- -- -- -- -- -- rO -- -- --");
 
 function padDigits(number, digits) {
     return Array(Math.max(digits - String(number).length + 1, 0)).join(0) + number;
