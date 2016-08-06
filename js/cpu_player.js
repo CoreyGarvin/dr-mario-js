@@ -102,6 +102,7 @@ var CpuPlayer = function(sourceGame) {
         // game.state = "Player's Turn";
     };
 
+    // Intended to be run on a player's turn, after the
     var findOptions = function(srcGame, depth) {
         // Recursion depth
         depth = depth || 1;
@@ -109,31 +110,21 @@ var CpuPlayer = function(sourceGame) {
         // Copy incoming game to avoid mutating it
         srcGame = srcGame.copy();
 
-        // If this is a follow-up move, do physics
-        // and bring in the next pill
-        if (depth > 1) {
-            // srcGame.map.settleAndDestroy();
-            srcGame.map.settleAndDestroy(srcGame.pill.positions());
 
-            // Player has won after first move
-            if (srcGame.map.bugCount == 0) {
-                return [{score: Number.POSITIVE_INFINITY}];
-            }
-
-            if (!srcGame.enterNextPill()) {
-                // console.log("could not bring in next pill");
-                return [];
-            }
-        }
         // Our working copy
         var game = srcGame.copy();
         var options = [];
 
         var nRots = game.pill.isDouble() ? 2 : 4;
 
-        // Test every position on the board...
-        for (var i = 8; i < game.map.positions.length; i++) {
-            var pos = game.map.positions[i];
+        // Test every reachable position on the board...
+        // Temporary move the new pill upwards while determining reachables
+        game.warpPill(Position(0, 3));
+        var positions = game.map.reachablesArr(game.startPositions);
+        game.warpPill(Position(1, 3));
+
+        for (var i = 0; i < positions.length; i++) {
+            var pos = positions[i];
 
             // Test every rotation
             for(var rotation = 0; rotation < nRots; rotation++) {
@@ -146,12 +137,31 @@ var CpuPlayer = function(sourceGame) {
 
                 // Warp to target position
                 if (game.warpPill(pos) && game.isPillSettled()) {
-                    game.print();
+                    
                     var option = game.pill.copy();
                     // Go deeper if possible
                     if (depth == 1) {
-                        // Find all suboptions
-                        option.options = findOptions(game, depth + 1);
+                        // game.print();
+                        // If this is a follow-up move, do physics
+                        // and bring in the next pill
+                        // srcGame.map.settleAndDestroy();
+                        var nextGame = game.copy();
+                        nextGame.map.settleAndDestroy(nextGame.pill.positions());
+
+                        // Player has won after first move
+                        if (nextGame.map.bugCount == 0) {
+                            option.score = Number.POSITIVE_INFINITY;
+                            option.length = 1;
+                            return [option];
+                        }
+
+                        if (!nextGame.enterNextPill()) {
+                            // console.log("could not bring in next pill");
+                            option.options = [];
+                        } else {
+                            // Find all suboptions
+                            option.options = findOptions(nextGame, depth + 1);
+                        }
 
                         // An option's score is the best score of
                         // it's sub-options
@@ -160,15 +170,14 @@ var CpuPlayer = function(sourceGame) {
                                 return b.score - a.score;
                             });
                             option.score = option.options[0].score;
-                            // Return first winning score
-                            if (option.score == Number.POSITIVE_INFINITY) {
-                                return [option];
-                            }
                         } else {
                             option.score = Number.NEGATIVE_INFINITY;
                         }
                         // for benchmarking
                         option.length = option.options.length;
+
+                        // Restore our game for the next iteration
+                        // game = srcGame.copy();
                     } else {
                         // game.map.print();
                         option.score = scoreGame(game);
@@ -198,7 +207,7 @@ var CpuPlayer = function(sourceGame) {
         var b = performance.now();
 
         var nOptions = options.reduce(function(a, b) {
-          return a + b.options.length;
+          return a + b.length;
         }, 0);
         var ms = b - a;
         console.log("Depth 1 options: " + options.length);

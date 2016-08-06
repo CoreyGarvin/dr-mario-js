@@ -17,22 +17,49 @@ var Map = function(rows, cols, nBugs, cells) {
 
 
     if (!cells) {
-        if(true) {
+        if(false) {
             // return Map.fromString("17 8 - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - yB yB - - - - - - - rB rB - - - - - - - - - rB rB - - - rB yB - - rB - rB - - yB - rB yB yB - rB - - - - bB - - rB - - - - - - - - yB - - - rB - rB yB - - - - - - - - - - yB - - - - - - - - rB rB yB bB - bB - - yB rB - yB - - - - - -");
             // return testMap;
             while (this.bugCount < nBugs) {
                 this.add(BUGS[getRandomInt(0, BUGS.length)].copy(), this.randomBlankPosition(4));
-                // map.killables(3).forEach(function(cell) {
-                //     cell.destroy();
-                // });
+                this.destroy(this.killables(null, 3));
+
             }
         } else {
+            var p = Position;
             // Consistent board
-            for (var row = 4; row < rows; row++) {
-                for (var col = 0; col < cols; col++) {
+            // for (var row = 4; row < rows; row++) {
+            //     for (var col = 0; col < cols; col++) {
+            //         this.add(BUGS[(col + row) % BUGS.length].copy(), Position(row, col));
+            //     }
+            // }
+
+            // Consistent board
+            for (var row = 2; row < 3; row++) {
+                for (var col = 0; col < cols - 2; col++) {
                     this.add(BUGS[(col + row) % BUGS.length].copy(), Position(row, col));
                 }
             }
+            // this.removes([
+            //     p(4,3), p(4,4), p(4,5),
+            //     p(5,2), p(5,3), p(5,5), p(5,6),
+            //     p(6,2), p(6,6),
+            //     p(7,2), p(7,3), p(7,5), p(7,6)
+            // ]);
+            // this.removes([
+            //     p(4,3), p(4,4), p(4,5),
+            //     p(5,2), p(5,3), p(5,5), p(5,6), p(5,7),
+            //     p(6,2), p(6,7),
+            //     p(7,2), p(7,3), p(7,5), p(7,6), p(7,7),
+            // ]);
+
+            // this.removes([
+            //     p(4,3), p(4,4), p(4,5),
+            //     p(5,2), p(5,3), p(5,5), p(5,6), p(5,7),
+            //     p(6,2), p(6,7),
+            //     p(7,2), p(7,3), p(7,3), p(7,6), p(7,7),
+            //     p(8,6),
+            // ]);
         }
     } else {
         if (this.positions.length != cells.length) {
@@ -367,7 +394,7 @@ Map.byCol = function(a, b) {return b.col - a.col || b.row - a.row;};
 Map.prototype.emptyStreak = function(position, horizontal) {
     var directions = horizontal ? ["right", "left"] : ["below", "above"];
     if (!this.empty(position)) {
-        alert("this muffucka");
+        // alert("this muffucka");
         return [];
     }
     var streak = [],
@@ -479,9 +506,98 @@ Map.prototype.occupancy = function() {
 var HP = 10;
 var FULLHP = 3 * HP;
 
-Map.prototype.healthAt = function(position, healthyColor, multiplier, horizontal) {
+Map.prototype.healthAt = function(pos) {
+    return this.verticalHealth(pos);
+};
+
+Map.prototype.verticalHealth = function(pos) {
+    var baseCell = this.at(pos);
+    if (!baseCell) {
+        return 0;
+    }
+    var healthyColor = baseCell.color;
+    var streak = this.verticalStreaks(1, [pos])[0];
+    var below = streak[0].below();
+    // Calc initial health
+    var baseHealth = (4 - streak.length) * HP;
+    // Find cell after the vertical streak
+    var nextPos = streak[streak.length - 1].above();
+
+    // Go up
+    var upHealth = baseHealth;
+    do {
+        var cell = this.at(nextPos);
+        if (cell) {
+            if (cell.type === Cell.TYPE.BUG) {
+                break;
+            }
+            streak = this.verticalStreaks(1, [nextPos])[0];
+            upHealth += (4 - streak.length) * HP;
+            healthyColor = cell.color;
+            nextPos = streak[streak.length - 1].above();
+        } else if (cell === undefined || nextPos.row == 0 || (upHealth/HP) > nextPos.row) {
+            if (upHealth) {
+                upHealth += 20 * HP;
+            }
+            break;
+        } else if (cell === null) {
+            break;
+        }
+    }
+    while (true);
+
+    if (! (upHealth / 10 < pos.row)) {
+        upHealth += 40 * HP;
+    }
+
+    if (upHealth < 10 * HP) {
+        return upHealth;
+    }
+
+    // Go down, find distance to a solid 'platform'
+    var downHealth = baseHealth;
+    var downStreak = this.emptyStreak(below);
+
+    // No empties beneath, not killable from below
+    if (!downStreak.length) {
+        downHealth += 20 * HP;
+    } else {
+        // We do have empties below
+        var neededMatches = 4 - (baseHealth/10);
+        var belowCell = this.at(downStreak[0].below());
+
+        // But nothing below those empties (OOB)
+        if (!belowCell) {
+            if (downStreak.length < neededMatches) {
+                downHealth += 20 * HP;
+            } else {
+                downHealth += (downStreak.length - neededMatches) * HP;
+            }
+        // Something under the empties.  Does it match the color?
+        } else {
+            var belowCellStreak = this.verticalStreaks(1, [downStreak[0].below()]);
+            // Not enough blanks?
+            if (downStreak.length < neededMatches) {
+
+                // Are there enough if the lower cells match color?
+                if (belowCellStreak[0].color === baseCell.color &&
+                    belowCellStreak.length   >= (neededMatches - downStreak.length)
+                ) {
+
+                } else {
+                    downHealth += 20 * HP;
+                }
+            } else {
+                downHealth += (downStreak.length - neededMatches) * HP;
+            }
+        }
+    }
+    return Math.min(upHealth, downHealth);
+};
+
+Map.prototype.verticalHealth2 = function(pos, healthyColor, multiplier) {
     multiplier = multiplier || 1;
-    var cell = this.at(position);
+    var cell = this.at(pos);
     if (cell) {
         // We've reached a different bug, escape
         if (cell.type === Cell.TYPE.BUG && healthyColor != null) {
@@ -489,30 +605,40 @@ Map.prototype.healthAt = function(position, healthyColor, multiplier, horizontal
         } else {
             // Entry point for new recursive call
             // healthyColor = healthyColor || cell.color;
+            var healthDelta = 0;
+            var nextPos = null;
 
-            // Healthy color subtracts health, otherwise add full health
-            var healthDelta = multiplier * (cell.color === healthyColor ? -HP : FULLHP);
-
-            return healthDelta + this.healthAt(position.above(), cell.color, multiplier, horizontal);
+            if (!healthyColor) {
+                var streak = this.verticalStreaks(1, [pos])[0];
+                healthDelta = streak.length * HP;
+                nextPos = streak[streak.length - 1].above();
+            } else {
+                nextPos = pos.above();
+                // Healthy color subtracts health, otherwise add full health
+                healthDelta = multiplier * (cell.color === healthyColor ? -HP : FULLHP);
+            }
+            return healthDelta + this.verticalHealth(nextPos, cell.color, multiplier);
         }
     }
     // Empty cell
     else if (cell === null) {
+
+        return 0;
         if (!healthyColor) {
             alert("no healthyColor ever defined");
             return;
         }
         // Jump to after empties
-        var nextPos = this.emptyStreak(position).pop().above();
+        var nextPos = this.emptyStreak(pos).pop().above();
         return this.healthAt(nextPos, healthyColor, 1, horizontal);
     }
     // Cell is OOB
-    return 0;
+    return 100;
 };
 
-Map.prototype.getHealthAt = function(position, horizontal) {
+Map.prototype.getHealthAt = function(pos, horizontal) {
     // Do not let values get to zero if they still exist
-    return Math.max(HP / 2, this.healthAt(position, null, null, horizontal));
+    return Math.max(HP / 2, this.healthAt(pos, null, null, horizontal));
 };
 
 Map.prototype.bugHealth = function(horizontal) {
@@ -799,6 +925,75 @@ Map.prototype.settle = function(positions, allTheWay) {
     return false;
 };
 
+Map.prototype.reachablesArr = function(posArr) {
+    var reachables = {};
+    this.reachables(posArr, reachables);
+
+    return Object.keys(reachables)
+    .map(function(key) {
+        return reachables[key];
+    })
+    .filter(function(pos) {
+        return pos != null;
+    });
+};
+
+Map.prototype.reachables = function(posArr, collector) {
+    for (var i = 0; i < posArr.length; i++) {
+        var pos = posArr[i];
+        // Already visited
+        if (collector[pos.hash] !== undefined) {
+            continue;
+        }
+        // Empty, store
+        if (this.empty(pos)) {
+            collector[pos.hash] = posArr[i];
+
+            var reachNext = [];
+
+            // Can we try down?
+            if (this.empty(pos.above()) ||
+               (this.empty(pos.right()) && !this.empty(pos.above().right()))
+            ) {
+                reachNext.push(pos.below());
+            }
+
+            // Can we try left?
+            if (this.empty(pos.right()) ||
+                this.empty(pos.above().left()) ||
+               !this.empty(pos.right())
+            ) {
+                reachNext.push(pos.left());
+            }
+
+            // Can we try right?
+            if (
+                (this.empty(pos.above().right()) && this.empty(pos.right())) ||
+                this.empty(pos.right().right())
+                // this.empty(pos.above().right().right())
+               // !this.empty(pos.right())
+            ) {
+                reachNext.push(pos.right());
+            }
+            // Can we try down-right?
+            if (
+                this.empty(pos.right()) &&
+                (!this.empty(pos.above()) && !this.empty(pos.above().right()))
+                // this.empty(pos.right().right())
+                // this.empty(pos.above().right().right())
+               // !this.empty(pos.right())
+            ) {
+                reachNext.push(pos.right().below());
+            }
+
+            this.reachables(reachNext, collector);
+        } else {
+            // Occupied
+            collector[pos.hash] = null;
+        }
+    }
+};
+
 // Like 'removes', but is contextual toward cell type (AKA, destroying half of
 // a pill will leave the other half as an orphan type)
 // Returns [Position] of cells that could be affected (like orphans or above cells))
@@ -984,7 +1179,14 @@ Map.prototype.print2 = function() {
 
 Map.prototype.print = function(miscStats) {
     // styledConsoleLog('<span style="color:hsl(0, 100%, 90%);background-color:hsl(0, 100%, 50%);"> Red </span> <span style="color:hsl(39, 100%, 85%);background-color:hsl(39, 100%, 50%);"> Orange </span> <span style="color:hsl(60, 100%, 35%);background-color:hsl(60, 100%, 50%);"> Yellow </span> <span style="color:hsl(120, 100%, 60%);background-color:hsl(120, 100%, 25%);"> Green </span> <span style="color:hsl(240, 100%, 90%);background-color:hsl(240, 100%, 50%);"> Blue </span> <span style="color:hsl(300, 100%, 85%);background-color:hsl(300, 100%, 25%);"> Purple </span> <span style="color:hsl(0, 0%, 80%);background-color:hsl(0, 0%, 0%);"> Black </span>');
-
+    var positions = this.reachablesArr([Position(1, 3), Position(1, 4)].concat(
+        Position(1, 2), Position(2, 3), Position(2, 4), Position(1, 5)
+    ));
+    var reachables = {};
+    positions.forEach(function(pos) {
+        reachables[pos.hash] = pos;
+    });
+    // this.reachables([Position(1, 3), Position(1, 4)], reachables);
     // var line = "__________________________\n";
     var s = this.toString();
     s += "\n  \t 0 1 2 3 4 5 6 7";
@@ -1033,6 +1235,8 @@ Map.prototype.print = function(miscStats) {
 
             }
             s += '<span style="color:' + color + ';background-color: #' + cell.color.value.toString(16) + ';">' + text + '</span>';
+        } else if (reachables[pos.hash]) {
+            s += '<span style="color:hsl(0, 100%, 90%);background-color: #444;">  </span>';
         }
         else s += '<span style="color:hsl(0, 100%, 90%);background-color: black;">  </span>';
     }
@@ -1042,7 +1246,7 @@ Map.prototype.print = function(miscStats) {
 };
 
 var testMap = Map.fromString("17 8 - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - yB - - - yB - - - - - - - - - - - - - rB - - rB - - - rB - - yB - - - yB - - - yB - bB - - yB r^ rB - - - - - - bU yB - - - bO yB - bB rB - - bB bO - r( b) - - - - yB yB - bB - - - - bB - r( b) - - - - - yB - rB bB - - - bB -");
-var testMap2 = Map.fromString("17 8 -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- y( r) -- -- -- -- -- -- -- y( b) -- -- -- -- -- -- r( b) -- -- -- -- -- -- -- bB -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- y( r) -- -- -- -- -- -- -- rO -- -- -- -- -- -- -- rO -- -- --");
+var testMap2 = Map.fromString("17 8 -- r^ -- -- -- -- -- -- -- rU -- -- -- -- -- -- -- rO -- -- -- -- -- -- -- bO -- -- -- -- -- -- -- bB -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- r( b) -- -- -- -- -- -- rO -- -- -- -- -- -- y^ yO -- -- -- -- -- -- bU bO -- -- -- -- -- --");
 
 function padDigits(number, digits) {
     return Array(Math.max(digits - String(number).length + 1, 0)).join(0) + number;

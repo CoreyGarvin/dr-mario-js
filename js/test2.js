@@ -271,7 +271,7 @@
         bodyDef.type = Box2D.Dynamics.b2Body.b2_staticBody;
 
         var game = new DrMarioGame({name: "Main"});
-        game.map = testMap2;
+        // game.map = testMap2;
         console.log(game.map.toString());
         // var cpuPlayer = null;
         if (true) {

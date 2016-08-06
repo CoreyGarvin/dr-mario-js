@@ -1,7 +1,7 @@
 var Pill = function(cells) {
     this.cells = cells || [
-        new Cell(Cell.TYPE.LEFT, Color.BLUE),
-        new Cell(Cell.TYPE.RIGHT, Color.BLUE)
+        new Cell(Cell.TYPE.LEFT),
+        new Cell(Cell.TYPE.RIGHT)
     ];
     this.sort();
 };
