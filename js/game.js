@@ -224,7 +224,10 @@ DrMarioGame.prototype.start = function() {
     game.pillQ = [new Pill()];
 
     var prom = game.events.emit("gameInitialized", game);
-    prom.then(playerTurn, logError);
+    prom.then(playerTurn, logError)
+    // .catch(function(err) {
+    //     console.error(err);
+    // });
 };
 
 DrMarioGame.offsets = {

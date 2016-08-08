@@ -17,10 +17,10 @@ var Map = function(rows, cols, nBugs, cells) {
 
 
     if (!cells) {
-        if(false) {
+        if(true) {
             // return Map.fromString("17 8 - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - yB yB - - - - - - - rB rB - - - - - - - - - rB rB - - - rB yB - - rB - rB - - yB - rB yB yB - rB - - - - bB - - rB - - - - - - - - yB - - - rB - rB yB - - - - - - - - - - yB - - - - - - - - rB rB yB bB - bB - - yB rB - yB - - - - - -");
-            // return testMap;
-            while (this.bugCount < nBugs) {
+            // return testMap5;
+            while (this.bugCount < 2) {
                 this.add(BUGS[getRandomInt(0, BUGS.length)].copy(), this.randomBlankPosition(4));
                 this.destroy(this.killables(null, 3));
 
@@ -179,6 +179,7 @@ Map.prototype.set = function(pos, val, test, replace) {
     return pos;
 };
 
+// Returns if a position is empty (but not OOB)
 Map.prototype.empty = function(pos) {
     return this.at(pos) === null;
 };
@@ -372,6 +373,7 @@ Map.prototype.entranceBlocked = function() {
     return this.atC(1, 3) || this.atC(1, 4);
 };
 
+// Optional params
 Map.prototype.randomBlankPosition = function(rowMin, rowMax, colMin, colMax) {
     var pos;
     rowMin = rowMin || 0,
@@ -400,6 +402,7 @@ Map.prototype.emptyStreak = function(position, horizontal) {
     var streak = [],
         pos = position;
 
+    // Go right or up
     do {
         // Collect
         streak.unshift(pos);
@@ -439,6 +442,7 @@ Map.prototype.positionStreaks = function(minLength, positions, horizontal, colle
         // Skip blanks
         if (!cell) {
             alert("positionStreaks hint provided empty position " + pos.toString());
+            console.error("positionStreaks hint provided empty position " + pos.toString());
             continue;
         }
 
@@ -520,23 +524,38 @@ Map.prototype.verticalHealth = function(pos) {
     var below = streak[0].below();
     // Calc initial health
     var baseHealth = (4 - streak.length) * HP;
-    // Find cell after the vertical streak
-    var nextPos = streak[streak.length - 1].above();
 
-    // Go up
+    if (baseHealth <= 0) {
+        return 0;
+    }
+
+    // Start moving upwards, calculating health in that direction
     var upHealth = baseHealth;
+    // Find cell above the vertical streak
+    var nextPos = streak[streak.length - 1].above();
     do {
         var cell = this.at(nextPos);
         if (cell) {
+            // We know this cell is of a different color
             if (cell.type === Cell.TYPE.BUG) {
+                // Found bug, abort (not sure if this is best logic)
                 break;
             }
+            // Some mismatched colors on top of bug
             streak = this.verticalStreaks(1, [nextPos])[0];
+            // Increase the health proportional to how healthy (short) the streak is
             upHealth += (4 - streak.length) * HP;
             healthyColor = cell.color;
             nextPos = streak[streak.length - 1].above();
-        } else if (cell === undefined || nextPos.row == 0 || (upHealth/HP) > nextPos.row) {
+        } else if (
+            // We've reached the top of the map
+            cell === undefined ||
+            nextPos.row == 0 ||
+            // We're high enough that the piece cannot be killed with the available room
+            (4 - streak.length) > nextPos.row
+        ) {
             if (upHealth) {
+                // Penalize massively
                 upHealth += 20 * HP;
             }
             break;
@@ -546,7 +565,7 @@ Map.prototype.verticalHealth = function(pos) {
     }
     while (true);
 
-    if (! (upHealth / 10 < pos.row)) {
+    if (! (upHealth / HP < pos.row)) {
         upHealth += 40 * HP;
     }
 
@@ -563,7 +582,7 @@ Map.prototype.verticalHealth = function(pos) {
         downHealth += 20 * HP;
     } else {
         // We do have empties below
-        var neededMatches = 4 - (baseHealth/10);
+        var neededMatches = baseHealth / HP;
         var belowCell = this.at(downStreak[0].below());
 
         // But nothing below those empties (OOB)
@@ -580,7 +599,7 @@ Map.prototype.verticalHealth = function(pos) {
             if (downStreak.length < neededMatches) {
 
                 // Are there enough if the lower cells match color?
-                if (belowCellStreak[0].color === baseCell.color &&
+                if (this.at(belowCellStreak[0][0]).color === baseCell.color &&
                     belowCellStreak.length   >= (neededMatches - downStreak.length)
                 ) {
 
@@ -861,7 +880,6 @@ Map.prototype.verticalStreaks = function(minLength, positions, collector) {
 // Returns [] of unique positions
 Map.prototype.killables = function(positions, minLength) {
     // this.sanityCheck("start killables");
-
     minLength = minLength || 4;
     var collector = {};
     this.verticalStreaks(minLength, positions, collector);
@@ -871,127 +889,156 @@ Map.prototype.killables = function(positions, minLength) {
 
 
 
-// Moves all eligable cells downward once.  Repeats if allTheWay
+// Moves all eligable cells downward once.  Repeats if allTheWay is truthy
 // Returns [] of positions of cells that were moved
 Map.prototype.settle = function(positions, allTheWay) {
-
-    // this.sanityCheck("start settle");
-
     positions = positions || this.positions;
-    var allMovers = {};
+    // Stores final positions of all moved cells during this function
+    var allMovers = [];
+    var currentMovers = [];
+    var settleCount = 0;
     do {
-        var settledPositions = {};
-        // For each position
+        // Stores desination positions of moved cells during this iteration
+        currentMovers = [];
+        // Iterate through positions backwards, so lower rows settle first.
+        // Lower rows will then be blank so upper rows can settle.
         var i = positions.length;
         while (i--) {
-            // if (i==120) {
-            //     console.log("this is the guy");
-            // }
+            var cell = this.at(positions[i]);
+            if (!cell || cell.type === Cell.TYPE.TOP) {
+                continue;
+            }
             // Attempt move downward, record ending positions of moved items
             var movedArr = this.moveContextually(positions[i], positions[i].below());
+            // If the cell did settle, update our "tracking" of those pieces
             if (movedArr) {
+                // settledPositions = settledPositions.concat()
+                // Using 2 seperate loops because I'm not certain that I guarantee
+                // the sorting of moveArr results by row, descending.  This ensures
+                // all deletes happen before all creates
+                // for (var j = movedArr.length; j--;) {
+                //     // Clear the previous position
+                //     delete allMovers[movedArr[j].above().hash];
+                // }
                 for (var j = movedArr.length; j--;) {
+                    currentMovers.push(movedArr[j]);
                     // Convenience alias
-                    var newPos  = movedArr[j];
-                    var prevPos = newPos.above();
-                    // Clear the allmovers where the pieces were previously
-                    delete allMovers[prevPos.row * this.cols + prevPos.col];
-                }
-                for (var j = movedArr.length; j--;) {
-                    // Convenience alias
-                    var newPos  = movedArr[j];
-                    var prevPos = newPos.above();
+                    // var newPos  = movedArr[j];
 
                     // Record moved position for local use
-                    settledPositions[newPos.row * this.cols + newPos.col] = newPos;
+                    // settledPositions[movedArr[j].hash] = movedArr[j];
 
                     // Record moved position for final output
-                    allMovers[newPos.row * this.cols + newPos.col] = newPos;
+                    // allMovers[newPos.hash] = newPos;
                 }
+            // Cell did not fall, therefore we know it will not fall again.
+            // We know that it DID fall at least once, so we add it to our allMovers
+            } else if (settleCount > 0) {
+                // Don't have to worry about linked cells, other half gets
+                // handled on another iteration
+                allMovers.push(positions[i]);
             }
         }
         // Only positions that moved are tested next round
-        positions = Object.keys(settledPositions).map(function(key) {
-            return settledPositions[key];
-        });
+        // positions = Object.keys(settledPositions).map(function(key) {
+        //     return settledPositions[key];
+        // });
+        positions = currentMovers;
+        // for (var j = positions.length; j--;) {
+        //     delete allMovers[positions[j].above().hash];
+        // }
+        // for (var j = positions.length; j--;) {
+        //     allMovers[positions[j].hash] = positions[j];
+        // }
+        settleCount++;
     } while (positions.length && allTheWay);
+
+    // if (allTheWay) {
+    allMovers = allMovers.concat(currentMovers)
+    // }
     // Return ending positions of anything that moved
-    var endPositions = Object.keys(allMovers).map(function(key) {
-        return allMovers[key];
-    });
-    if (endPositions.length) {
-        return endPositions;
+    // var endPositions = Object.keys(allMovers).map(function(key) {
+    //     return allMovers[key];
+    // });
+    if (allMovers.length) {
+        return allMovers;
     }
     return false;
 };
 
-Map.prototype.reachablesArr = function(posArr) {
-    var reachables = {};
-    this.reachables(posArr, reachables);
+// Returns an [Position] that are able to be navigated to
+// through the use of legal game moves.  Like a flood fill,
+// but with custom rules for the way the pill moves
+Map.prototype.reachables = function(posArr) {
+    var collector = {};
 
-    return Object.keys(reachables)
+    var floodFill = function(posArr, collector) {
+        for (var i = 0; i < posArr.length; i++) {
+            var pos = posArr[i];
+            // Already visited
+            if (collector[pos.hash] !== undefined) {
+                continue;
+            }
+            // Empty, store
+            if (this.empty(pos)) {
+                collector[pos.hash] = posArr[i];
+
+                var reachNext = [];
+
+                // Can we try down?
+                if (this.empty(pos.above()) ||
+                   (this.empty(pos.right()) && !this.empty(pos.above().right()))
+                ) {
+                    reachNext.push(pos.below());
+                }
+
+                // Can we try left?
+                if (this.empty(pos.right()) ||
+                    this.empty(pos.above().left()) ||
+                   !this.empty(pos.right())
+                ) {
+                    reachNext.push(pos.left());
+                }
+
+                // Can we try right?
+                if (
+                    (this.empty(pos.above().right()) && this.empty(pos.right())) ||
+                    this.empty(pos.right().right())
+                    // this.empty(pos.above().right().right())
+                   // !this.empty(pos.right())
+                ) {
+                    reachNext.push(pos.right());
+                }
+                // Can we try down-right?
+                if (
+                    this.empty(pos.right()) &&
+                    (!this.empty(pos.above()) && !this.empty(pos.above().right()))
+                    // this.empty(pos.right().right())
+                    // this.empty(pos.above().right().right())
+                   // !this.empty(pos.right())
+                ) {
+                    reachNext.push(pos.right().below());
+                }
+                // Recursive flood
+                floodFill(reachNext, collector);
+            } else {
+                // Occupied
+                collector[pos.hash] = null;
+            }
+        }
+    }.bind(this);
+
+    // Kick off the filling
+    floodFill(posArr, collector);
+
+    // Return only reachable positions
+    return Object.keys(collector)
     .map(function(key) {
-        return reachables[key];
+        return collector[key];
     })
     .filter(function(pos) {
         return pos != null;
     });
-};
-
-Map.prototype.reachables = function(posArr, collector) {
-    for (var i = 0; i < posArr.length; i++) {
-        var pos = posArr[i];
-        // Already visited
-        if (collector[pos.hash] !== undefined) {
-            continue;
-        }
-        // Empty, store
-        if (this.empty(pos)) {
-            collector[pos.hash] = posArr[i];
-
-            var reachNext = [];
-
-            // Can we try down?
-            if (this.empty(pos.above()) ||
-               (this.empty(pos.right()) && !this.empty(pos.above().right()))
-            ) {
-                reachNext.push(pos.below());
-            }
-
-            // Can we try left?
-            if (this.empty(pos.right()) ||
-                this.empty(pos.above().left()) ||
-               !this.empty(pos.right())
-            ) {
-                reachNext.push(pos.left());
-            }
-
-            // Can we try right?
-            if (
-                (this.empty(pos.above().right()) && this.empty(pos.right())) ||
-                this.empty(pos.right().right())
-                // this.empty(pos.above().right().right())
-               // !this.empty(pos.right())
-            ) {
-                reachNext.push(pos.right());
-            }
-            // Can we try down-right?
-            if (
-                this.empty(pos.right()) &&
-                (!this.empty(pos.above()) && !this.empty(pos.above().right()))
-                // this.empty(pos.right().right())
-                // this.empty(pos.above().right().right())
-               // !this.empty(pos.right())
-            ) {
-                reachNext.push(pos.right().below());
-            }
-
-            this.reachables(reachNext, collector);
-        } else {
-            // Occupied
-            collector[pos.hash] = null;
-        }
-    }
 };
 
 // Like 'removes', but is contextual toward cell type (AKA, destroying half of
@@ -1179,7 +1226,7 @@ Map.prototype.print2 = function() {
 
 Map.prototype.print = function(miscStats) {
     // styledConsoleLog('<span style="color:hsl(0, 100%, 90%);background-color:hsl(0, 100%, 50%);"> Red </span> <span style="color:hsl(39, 100%, 85%);background-color:hsl(39, 100%, 50%);"> Orange </span> <span style="color:hsl(60, 100%, 35%);background-color:hsl(60, 100%, 50%);"> Yellow </span> <span style="color:hsl(120, 100%, 60%);background-color:hsl(120, 100%, 25%);"> Green </span> <span style="color:hsl(240, 100%, 90%);background-color:hsl(240, 100%, 50%);"> Blue </span> <span style="color:hsl(300, 100%, 85%);background-color:hsl(300, 100%, 25%);"> Purple </span> <span style="color:hsl(0, 0%, 80%);background-color:hsl(0, 0%, 0%);"> Black </span>');
-    var positions = this.reachablesArr([Position(1, 3), Position(1, 4)].concat(
+    var positions = this.reachables([Position(1, 3), Position(1, 4)].concat(
         Position(1, 2), Position(2, 3), Position(2, 4), Position(1, 5)
     ));
     var reachables = {};
@@ -1247,6 +1294,13 @@ Map.prototype.print = function(miscStats) {
 
 var testMap = Map.fromString("17 8 - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - yB - - - yB - - - - - - - - - - - - - rB - - rB - - - rB - - yB - - - yB - - - yB - bB - - yB r^ rB - - - - - - bU yB - - - bO yB - bB rB - - bB bO - r( b) - - - - yB yB - bB - - - - bB - r( b) - - - - - yB - rB bB - - - bB -");
 var testMap2 = Map.fromString("17 8 -- r^ -- -- -- -- -- -- -- rU -- -- -- -- -- -- -- rO -- -- -- -- -- -- -- bO -- -- -- -- -- -- -- bB -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- r( b) -- -- -- -- -- -- rO -- -- -- -- -- -- y^ yO -- -- -- -- -- -- bU bO -- -- -- -- -- --");
+var testMap3 = Map.fromString("17 8 -- -- -- -- -- -- -- -- -- -- -- r( b) -- y^ -- -- -- -- -- -- -- bU -- -- -- -- -- -- -- b( r) -- -- -- -- -- -- -- rB r( y) -- -- -- -- -- -- rO -- -- rO -- -- -- -- rO bO -- bB -- -- -- -- bB b^ -- -- -- -- -- -- rB bU -- -- -- -- -- -- -- yB bB -- -- -- -- -- -- bO -- rO -- bO yO -- -- bB -- yO -- bO yB -- bB -- -- bO -- b( r) -- rB yB -- rO -- yB -- r^ -- rB bB rO -- r( y) rU rB yB -- yO -- rB yB rB");
+
+// Side crud, loses this map
+var testMap4 = Map.fromString("17 8 -- -- -- -- -- -- r^ b^ -- -- -- -- -- -- rU rU -- -- -- -- -- r( y) y^ -- -- -- -- -- rO -- yU -- -- -- -- -- rB r( b) -- -- -- -- -- bB rB -- -- -- -- -- -- bO -- bB -- -- -- -- -- bB yB rB -- -- -- -- -- rB -- bB -- -- -- -- -- -- -- bB -- -- -- -- yO rO -- rB -- -- -- -- y^ y^ bB -- -- -- -- -- bU yU -- bB -- -- -- -- b^ bO yB rB -- -- -- rO yU y( r) bB -- -- rO r^ y^ r^ rB bB -- -- rO rU yU rU rO bO");
+
+// Test settle()
+var testMap5 = Map.fromString("17 8 -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- b^ -- -- -- -- -- -- -- yU -- -- -- -- b^ yO -- yO -- -- -- -- rU bO -- rB -- -- -- -- rB yO -- -- rO r^ yO y( r) yO -- -- rB bU -- yB -- yB -- rB -- yO -- bB yB rB bB -- yO -- -- rB bB bB yB yB yB -- -- -- yB -- -- y( r) -- yB rB -- -- bB -- rB r( y) -- -- -- rB -- bB -- yB yB -- r( y) -- rB yB bB bB -- -- yB rB -- -- -- rB -- yB yB bB -- yB rB -- yB rB bB");
 
 function padDigits(number, digits) {
     return Array(Math.max(digits - String(number).length + 1, 0)).join(0) + number;

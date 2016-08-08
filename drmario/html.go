@@ -8,7 +8,6 @@ var html = `
     <title>title</title>
     <link rel="stylesheet" href="css/style.css">
     <script src="js/pixi.js"></script>
-    <script src="js/promiscuous.js"></script>
     <script src="js/other.js"></script>
     <script src="js/color.js"></script>
     <script src="js/position.js"></script>

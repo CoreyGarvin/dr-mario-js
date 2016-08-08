@@ -120,7 +120,7 @@ var CpuPlayer = function(sourceGame) {
         // Test every reachable position on the board...
         // Temporary move the new pill upwards while determining reachables
         game.warpPill(Position(0, 3));
-        var positions = game.map.reachablesArr(game.startPositions);
+        var positions = game.map.reachables(game.startPositions);
         game.warpPill(Position(1, 3));
 
         for (var i = 0; i < positions.length; i++) {

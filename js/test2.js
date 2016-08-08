@@ -272,9 +272,9 @@
 
         var game = new DrMarioGame({name: "Main"});
         // game.map = testMap2;
-        console.log(game.map.toString());
+        // console.log(game.map.toString());
         // var cpuPlayer = null;
-        if (true) {
+        if (false) {
             var cpuPlayer = new CpuPlayer(game);
             cpuPlayer.events.register(function() {
                 var simActors = [];
@@ -317,6 +317,9 @@
                     setTimeout(function() {
                         resolve();
                     }, 1500);
+                })
+                .catch(function(err) {
+                    console.err(err);
                 });
             };
 

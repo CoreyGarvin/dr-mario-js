@@ -8,7 +8,7 @@ var PositionPool = (function(rows, cols, pad) {
     var Position = function(row, col) {
         this.row = row;
         this.col = col;
-        this.hash = row * rows + col;
+        this.hash = row * cols + col;
     };
 
     var getCached = function(row, col) {
@@ -58,6 +58,7 @@ var PositionPool = (function(rows, cols, pad) {
     return {
         getPosition: getPosition,
         allPositions: function() {return positions;},
+        // Can be used to toggle or set caching
         toggleCaching: function(enabled) {
             cacheEnabled = enabled !== undefined ? enabled : !cacheEnabled;
             positionGetter = cacheEnabled ? getCached : getNew;
